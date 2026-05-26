@@ -11,4 +11,4 @@ Edit `script-opts/liquid-glass.conf` for Liquid Glass options, or `script-opts/u
 | `show_frost_noise` | `yes`, `no` | `yes` | Toggle the noise texture layer |
 
 ## Power users
-Edit `scripts/uosc/lib/theme.lua` directly to change individual token values.
+Edit `scripts/uosc/lib/liquid/theme.lua` directly to change individual token values.
