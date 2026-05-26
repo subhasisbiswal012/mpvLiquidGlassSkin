@@ -16,10 +16,23 @@ function M.stub_mp(opts)
     add_key_binding = function(_, _, _) end,
     options = { read_options = function(_, _) end },
   }
+  -- Stub the `require('mp.xxx')` modules production code may pull in.
+  package.loaded['mp.options'] = { read_options = function(_, _) end }
+  package.loaded['mp.msg']     = { info = function(_) end, warn = function(_) end, error = function(_) end, verbose = function(_) end, debug = function(_) end }
+  package.loaded['mp.utils']   = {
+    join_path = function(a, b) return a .. '/' .. b end,
+    split_path = function(p) return p:match('^(.*/)([^/]*)$') end,
+    file_info = function(_) return nil end,
+    format_json = function(_) return '{}' end,
+    parse_json = function(_) return nil end,
+  }
 end
 
 function M.clear_mp()
   _G.mp = nil
+  package.loaded['mp.options'] = nil
+  package.loaded['mp.msg']     = nil
+  package.loaded['mp.utils']   = nil
 end
 
 return M
