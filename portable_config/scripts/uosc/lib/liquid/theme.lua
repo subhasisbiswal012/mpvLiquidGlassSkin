@@ -3,13 +3,13 @@
 local M = {}
 
 M.dark = {
-  body_alpha       = 0.09,
-  body_color       = 'FFFFFF',
+  body_alpha       = 0.40,
+  body_color       = '0A0A0C',
   frost_alpha      = 0.06,
-  top_highlight    = 0.30,
-  rim_light        = 0.55,
-  border           = 0.22,
-  shadow_alpha     = 0.35,
+  top_highlight    = 0.45,
+  rim_light        = 0.75,
+  border           = 0.35,
+  shadow_alpha     = 0.55,
   ink              = 'FFFFFF',
   ink_alpha        = 0.95,
   ink_dim          = 0.55,
@@ -19,13 +19,13 @@ M.dark = {
 }
 
 M.light = {
-  body_alpha       = 0.55,
-  body_color       = 'FFFFFF',
+  body_alpha       = 0.65,
+  body_color       = 'F4F1EA',
   frost_alpha      = 0.08,
-  top_highlight    = 0.60,
-  rim_light        = 0.70,
-  border           = 0.35,
-  shadow_alpha     = 0.15,
+  top_highlight    = 0.55,
+  rim_light        = 0.80,
+  border           = 0.40,
+  shadow_alpha     = 0.20,
   ink              = '0A0A0C',
   ink_alpha        = 0.95,
   ink_dim          = 0.55,

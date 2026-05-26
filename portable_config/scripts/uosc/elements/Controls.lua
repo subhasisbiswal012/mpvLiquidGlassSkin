@@ -418,6 +418,19 @@ function Controls:render()
 	local lg = _G.liquid_glass or { intensity = 1.0, show_frost = true }
 	local ass = assdraw.ass_new()
 
+	-- Disable other uosc elements so only our three pebbles render.
+	-- uosc keeps its elements in the global `Elements` table; we flag each
+	-- as disabled on every render frame (idempotent; cheap).
+	if Elements then
+		for _, key in ipairs({
+			'timeline', 'top_bar', 'volume', 'speed',
+			'pause_indicator', 'buffering_indicator', 'curtain',
+		}) do
+			local el = Elements[key]
+			if el then el.enabled = false end
+		end
+	end
+
 	local function draw_glass(geom)
 		for layer_text in liquid_glass_lib.draw(geom):gmatch('[^\n]+') do
 			if layer_text ~= '' then
