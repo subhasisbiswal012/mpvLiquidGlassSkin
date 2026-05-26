@@ -122,20 +122,20 @@ opt.read_options(options, 'uosc', handle_options)
 -- Load Liquid Glass options, apply theme, register toggle binding.
 local lg_theme = require('lib/liquid/theme')
 local lg_opts = {
-  liquid_glass_theme = 'dark',
-  liquid_glass_intensity = 1.0,
-  liquid_glass_accent = 'E8553A',
-  liquid_glass_show_frost_noise = 'yes',
+  theme = 'dark',
+  intensity = 1.0,
+  accent = 'E8553A',
+  show_frost_noise = 'yes',
 }
-require('mp.options').read_options(lg_opts, 'uosc')
-lg_theme.set(lg_opts.liquid_glass_theme)
-if lg_opts.liquid_glass_accent and lg_opts.liquid_glass_accent ~= '' then
-  lg_theme.dark.accent  = lg_opts.liquid_glass_accent
-  lg_theme.light.accent = lg_opts.liquid_glass_accent
+require('mp.options').read_options(lg_opts, 'liquid-glass')
+lg_theme.set(lg_opts.theme)
+if lg_opts.accent and lg_opts.accent ~= '' then
+  lg_theme.dark.accent  = lg_opts.accent
+  lg_theme.light.accent = lg_opts.accent
 end
 _G.liquid_glass = {
-  intensity = tonumber(lg_opts.liquid_glass_intensity) or 1.0,
-  show_frost = lg_opts.liquid_glass_show_frost_noise == 'yes',
+  intensity = tonumber(lg_opts.intensity) or 1.0,
+  show_frost = lg_opts.show_frost_noise == 'yes',
 }
 
 local function lg_toggle_theme()

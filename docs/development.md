@@ -33,9 +33,9 @@ Runs all `_spec.lua` files under `tests/`.
 
 ## Manual smoke test
 ```bash
-mpv --no-config --script=portable_config/scripts/uosc/main.lua <some_video.mp4>
+mpv --config-dir=portable_config <some_video.mp4>
 ```
-The `--no-config` flag bypasses your normal mpv config so the skin renders against vanilla defaults.
+Points mpv at our `portable_config/` so uosc and its options load the way an end-user install would.
 
 ## Lua compatibility
 
