@@ -11,7 +11,7 @@ See [docs/install.md](docs/install.md).
 See [docs/customization.md](docs/customization.md).
 
 ## License
-MIT. Forks uosc (MIT); see `portable_config/scripts/uosc/LICENSE` for attribution.
+MIT (own code). Vendors uosc, which is LGPL-2.1; see `portable_config/scripts/uosc/LICENSE.LGPL` for attribution.
 
 ## Status
 Pre-alpha. Milestone 1 (foundation + control bar) in progress.
