@@ -1,0 +1,22 @@
+# Brainstorming companion artifacts (transient mockups, server state)
+.superpowers/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*~
+
+# Build outputs (reserved)
+dist/
+build/
+*.log
+
+# Node / tooling (reserved for icon-forge & preview harness)
+node_modules/
+package-lock.json
