@@ -12,3 +12,6 @@ Re-copy `portable_config/` over your existing files.
 
 ## Uninstall
 Delete `scripts/uosc/`, `fonts/Geist-*.ttf`, and `script-opts/uosc.conf` from your mpv config directory.
+
+## Fonts
+Geist (OFL-licensed) is bundled in `portable_config/fonts/`. mpv loads fonts from this directory automatically when it's part of your mpv config.
