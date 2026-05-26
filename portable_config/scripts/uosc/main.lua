@@ -118,6 +118,38 @@ function handle_options(changed_options)
 	request_render()
 end
 opt.read_options(options, 'uosc', handle_options)
+-- ===== Liquid Glass skin =====
+-- Load Liquid Glass options, apply theme, register toggle binding.
+local lg_theme = require('lib/liquid/theme')
+local lg_opts = {
+  liquid_glass_theme = 'dark',
+  liquid_glass_intensity = 1.0,
+  liquid_glass_accent = 'E8553A',
+  liquid_glass_show_frost_noise = 'yes',
+}
+require('mp.options').read_options(lg_opts, 'uosc')
+lg_theme.set(lg_opts.liquid_glass_theme)
+if lg_opts.liquid_glass_accent and lg_opts.liquid_glass_accent ~= '' then
+  lg_theme.dark.accent  = lg_opts.liquid_glass_accent
+  lg_theme.light.accent = lg_opts.liquid_glass_accent
+end
+_G.liquid_glass = {
+  intensity = tonumber(lg_opts.liquid_glass_intensity) or 1.0,
+  show_frost = lg_opts.liquid_glass_show_frost_noise == 'yes',
+}
+
+local function lg_toggle_theme()
+  if lg_theme.current == lg_theme.dark then
+    lg_theme.set('light')
+    mp.osd_message('Liquid Glass: light')
+  else
+    lg_theme.set('dark')
+    mp.osd_message('Liquid Glass: dark')
+  end
+end
+mp.register_script_message('liquid-glass-toggle-theme', lg_toggle_theme)
+mp.add_key_binding('Ctrl+t', 'liquid-glass-toggle-theme', lg_toggle_theme)
+-- ===== /Liquid Glass skin =====
 -- Normalize values
 options.proximity_out = math.max(options.proximity_out, options.proximity_in + 1)
 if options.chapter_ranges:sub(1, 4) == '^op|' then options.chapter_ranges = defaults.chapter_ranges end
