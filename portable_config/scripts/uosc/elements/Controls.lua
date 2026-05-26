@@ -418,6 +418,15 @@ function Controls:render()
 	local lg = _G.liquid_glass or { intensity = 1.0, show_frost = true }
 	local ass = assdraw.ass_new()
 
+	local function draw_glass(geom)
+		for layer_text in liquid_glass_lib.draw(geom):gmatch('[^\n]+') do
+			if layer_text ~= '' then
+				ass:new_event()
+				ass:append(layer_text)
+			end
+		end
+	end
+
 	-- Pebble layout: three independent rounded rects.
 	local pebble_h = 60
 	local pebble_r = pebble_h / 2
@@ -446,8 +455,7 @@ function Controls:render()
 	local pf_bgr  = _lg_bgr(liquid_theme_lib.current.progress_fill)
 
 	-- 1. Play / pause pebble + icon
-	ass:new_event()
-	ass:append(liquid_glass_lib.draw(pebble_geom(play_x, play_w)))
+	draw_glass(pebble_geom(play_x, play_w))
 
 	local icon_name = state.pause and 'play' or 'pause'
 	local icon_path = liquid_icons_lib.get(icon_name)
@@ -463,8 +471,7 @@ function Controls:render()
 	end
 
 	-- 2. Time readout pebble + text
-	ass:new_event()
-	ass:append(liquid_glass_lib.draw(pebble_geom(times_x, times_w)))
+	draw_glass(pebble_geom(times_x, times_w))
 	local time_str = string.format('%s / %s',
 		_lg_format_time(state.time or 0),
 		_lg_format_time(state.duration or 0))
@@ -478,8 +485,7 @@ function Controls:render()
 	))
 
 	-- 3. Progress pebble + track
-	ass:new_event()
-	ass:append(liquid_glass_lib.draw(pebble_geom(progress_x, progress_w)))
+	draw_glass(pebble_geom(progress_x, progress_w))
 	local track_y = row_y + math.floor(pebble_h / 2) - 2
 	local track_x1 = progress_x + 22
 	local track_x2 = progress_x + progress_w - 22

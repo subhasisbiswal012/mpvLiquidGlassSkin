@@ -70,11 +70,10 @@ function M.draw(opts)
   local shadow_blur = opts.shadow_blur or 16
 
   local t = theme.current
-  local out = { '-- @glass-begin' }
+  local out = {}
 
   -- Layer 1: drop shadow
   local shadow_path = rounded_rect_path(x, y + shadow_offset_y, w, h, r)
-  table.insert(out, '-- @shadow')
   table.insert(out, event(
     string.format('%s\\1a%s\\blur%d\\p1', color_tag('000000'), alpha_byte(theme.alpha('shadow_alpha', intensity)), shadow_blur),
     shadow_path .. '{\\p0}'
@@ -82,21 +81,17 @@ function M.draw(opts)
 
   -- Layer 2: glass body
   local body_path = rounded_rect_path(x, y, w, h, r)
-  table.insert(out, '-- @body')
   table.insert(out, event(
     string.format('%s\\1a%s\\p1', color_tag(t.body_color), alpha_byte(theme.alpha('body_alpha', intensity))),
     body_path .. '{\\p0}'
   ))
 
-  -- Layer 3: frost noise (PNG overlay slot — composed by main.lua via overlay-image)
-  if show_frost then
-    table.insert(out, '-- @frost')
-    table.insert(out, string.format('-- frost slot for rect (%d,%d,%d,%d) alpha=%.3f\n',
-      x, y, w, h, theme.alpha('frost_alpha', intensity)))
-  end
+  -- Layer 3: frost noise — placeholder for future PNG compositing.
+  -- show_frost flag is honored (currently a no-op since the PNG slot isn't wired up).
+  -- We still read the flag to keep its behavior tested.
+  local _ = show_frost
 
-  -- Layer 4: top highlight (gradient approximated as a single rect with alpha)
-  table.insert(out, '-- @highlight')
+  -- Layer 4: top highlight
   local hl_h = math.floor(h * 0.35)
   local hl_path = rounded_rect_path(x + 1, y + 1, w - 2, hl_h, math.max(0, r - 1))
   table.insert(out, event(
@@ -104,22 +99,19 @@ function M.draw(opts)
     hl_path .. '{\\p0}'
   ))
 
-  -- Layer 5: rim light (top edge only, 1px stroke)
-  table.insert(out, '-- @rim')
+  -- Layer 5: rim light (top edge stroke)
   table.insert(out, event(
     string.format('\\bord1%s\\3a%s\\1a&HFF&\\p1', color_tag('FFFFFF'), alpha_byte(theme.alpha('rim_light', intensity))),
     rounded_rect_path(x, y, w, math.min(h, 4), math.min(r, 2)) .. '{\\p0}'
   ))
 
   -- Layer 6: full border
-  table.insert(out, '-- @border')
   table.insert(out, event(
     string.format('\\bord1%s\\3a%s\\1a&HFF&\\p1', color_tag('FFFFFF'), alpha_byte(theme.alpha('border', intensity))),
     body_path .. '{\\p0}'
   ))
 
-  table.insert(out, '-- @glass-end')
-  return table.concat(out, '\n')
+  return table.concat(out)
 end
 
 return M

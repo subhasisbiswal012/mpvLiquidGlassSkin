@@ -11,23 +11,26 @@ describe('glass primitive', function()
   end)
   after_each(function() helpers.clear_mp() end)
 
-  it('returns an ASS string with all six layer markers', function()
+  it('returns a non-empty ASS string', function()
     local out = glass.draw({ x = 0, y = 0, w = 60, h = 60, r = 30 })
     assert.is_string(out)
-    -- Each layer leaves a recognizable signature in the ASS output.
-    for _, marker in ipairs({
-      '@shadow',     -- layer 1
-      '@body',       -- layer 2
-      '@frost',      -- layer 3
-      '@highlight',  -- layer 4
-      '@rim',        -- layer 5
-      '@border',     -- layer 6
-    }) do
-      assert.is_truthy(out:find(marker, 1, true), 'missing layer marker: '..marker)
-    end
+    assert.is_true(#out > 100, 'expected non-trivial output, got '..#out..' chars')
   end)
 
-  it('respects theme switching by emitting different colors', function()
+  it('emits five drawing-mode layers (\\p1 tag appears 5 times)', function()
+    local out = glass.draw({ x = 0, y = 0, w = 60, h = 60, r = 30 })
+    local count = 0
+    for _ in out:gmatch('\\p1') do count = count + 1 end
+    assert.are.equal(5, count, 'expected 5 visible layers (shadow, body, highlight, rim, border); got '..count)
+  end)
+
+  it('does not emit Lua-style comments that would render as text', function()
+    local out = glass.draw({ x = 0, y = 0, w = 60, h = 60, r = 30 })
+    -- "--" inside an ASS dialogue line would render as two visible minuses.
+    assert.is_falsy(out:find('--', 1, true), 'output contains "--" sequence; would render as literal text')
+  end)
+
+  it('respects theme switching by emitting different output', function()
     local theme = require('lib/liquid/theme')
     theme.set('dark')
     local dark_out = glass.draw({ x = 0, y = 0, w = 60, h = 60, r = 30 })
@@ -44,13 +47,14 @@ describe('glass primitive', function()
 
   it('emits geometry matching the rect', function()
     local out = glass.draw({ x = 100, y = 200, w = 60, h = 60, r = 30 })
-    -- Check the coords show up in the body's move-to.
     assert.is_truthy(out:find('100', 1, true))
     assert.is_truthy(out:find('200', 1, true))
   end)
 
-  it('honors show_frost = false by omitting frost layer', function()
-    local out = glass.draw({ x = 0, y = 0, w = 60, h = 60, r = 30, show_frost = false })
-    assert.is_falsy(out:find('@frost', 1, true))
+  it('accepts show_frost = false without error', function()
+    local ok, _ = pcall(function()
+      return glass.draw({ x = 0, y = 0, w = 60, h = 60, r = 30, show_frost = false })
+    end)
+    assert.is_true(ok)
   end)
 end)
