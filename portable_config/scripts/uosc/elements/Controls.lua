@@ -377,6 +377,138 @@ function Controls:on_prop_title_bar() self:update_dimensions() end
 function Controls:on_prop_fullormaxed() self:update_dimensions() end
 function Controls:on_timeline_enabled() self:update_dimensions() end
 
+-- ===== Liquid Glass skin patch (Controls render) =====
+-- Original uosc Controls had no :render() method — it only lays out child
+-- Button/CycleButton elements (which render themselves). Here we add a
+-- :render() that draws three glass pebbles (play, time, progress) instead,
+-- and disable the original button children so they don't overlap our pebbles.
+--
+-- To restore stock uosc behavior: delete this entire block AND remove the
+-- `enabled = false` loop in update_dimensions (or revert from upstream).
+
+local liquid_glass_lib  = require('lib/liquid/glass')
+local liquid_icons_lib  = require('lib/liquid/icons')
+local liquid_theme_lib  = require('lib/liquid/theme')
+
+local function _lg_format_time(s)
+	s = math.max(0, math.floor(s or 0))
+	local m = math.floor(s / 60)
+	local sec = s % 60
+	local h = math.floor(m / 60)
+	if h > 0 then
+		return string.format('%d:%02d:%02d', h, m % 60, sec)
+	end
+	return string.format('%02d:%02d', m, sec)
+end
+
+local function _lg_bgr(rrggbb)
+	return rrggbb:sub(5, 6) .. rrggbb:sub(3, 4) .. rrggbb:sub(1, 2)
+end
+
+function Controls:render()
+	local visibility = self:get_visibility()
+	if visibility <= 0 then return end
+	if not self.enabled then return end
+
+	-- Disable stock child elements so only our pebbles render.
+	for _, control in ipairs(self.layout) do
+		if control.element then control.element.enabled = false end
+	end
+
+	local lg = _G.liquid_glass or { intensity = 1.0, show_frost = true }
+	local ass = assdraw.ass_new()
+
+	-- Pebble layout: three independent rounded rects.
+	local pebble_h = 60
+	local pebble_r = pebble_h / 2
+	local gap = 14
+	local play_w = 60
+	local times_w = 130
+	local progress_w = math.min(360, (self.bx - self.ax) - play_w - times_w - 2 * gap - 40)
+	if progress_w < 80 then progress_w = 80 end
+	local total_w = play_w + times_w + progress_w + 2 * gap
+
+	local row_x = math.floor((self.ax + self.bx) / 2 - total_w / 2)
+	local row_y = math.floor((self.ay + self.by) / 2 - pebble_h / 2)
+
+	local play_x     = row_x
+	local times_x    = play_x + play_w + gap
+	local progress_x = times_x + times_w + gap
+
+	local function pebble_geom(x, w)
+		return {
+			x = x, y = row_y, w = w, h = pebble_h, r = pebble_r,
+			intensity = lg.intensity, show_frost = lg.show_frost,
+		}
+	end
+
+	local ink_bgr = _lg_bgr(liquid_theme_lib.current.ink)
+	local pf_bgr  = _lg_bgr(liquid_theme_lib.current.progress_fill)
+
+	-- 1. Play / pause pebble + icon
+	ass:new_event()
+	ass:append(liquid_glass_lib.draw(pebble_geom(play_x, play_w)))
+
+	local icon_name = state.pause and 'play' or 'pause'
+	local icon_path = liquid_icons_lib.get(icon_name)
+	if icon_path then
+		ass:new_event()
+		ass:append(string.format(
+			'{\\an7\\pos(%d,%d)\\bord0\\shad0\\1c&H%s&\\1a&H0F&\\p1}%s{\\p0}',
+			play_x + math.floor((play_w - 24) / 2),
+			row_y + math.floor((pebble_h - 24) / 2),
+			ink_bgr,
+			icon_path
+		))
+	end
+
+	-- 2. Time readout pebble + text
+	ass:new_event()
+	ass:append(liquid_glass_lib.draw(pebble_geom(times_x, times_w)))
+	local time_str = string.format('%s / %s',
+		_lg_format_time(state.time or 0),
+		_lg_format_time(state.duration or 0))
+	ass:new_event()
+	ass:append(string.format(
+		'{\\an5\\pos(%d,%d)\\fnGeist Mono\\fs14\\bord0\\shad0\\1c&H%s&}%s',
+		times_x + math.floor(times_w / 2),
+		row_y + math.floor(pebble_h / 2),
+		ink_bgr,
+		time_str
+	))
+
+	-- 3. Progress pebble + track
+	ass:new_event()
+	ass:append(liquid_glass_lib.draw(pebble_geom(progress_x, progress_w)))
+	local track_y = row_y + math.floor(pebble_h / 2) - 2
+	local track_x1 = progress_x + 22
+	local track_x2 = progress_x + progress_w - 22
+	local track_w = track_x2 - track_x1
+	local progress = (state.duration and state.duration > 0)
+		and ((state.time or 0) / state.duration) or 0
+	if progress < 0 then progress = 0 elseif progress > 1 then progress = 1 end
+
+	-- track background (dim white)
+	ass:new_event()
+	ass:append(string.format(
+		'{\\an7\\pos(0,0)\\bord0\\shad0\\1c&HFFFFFF&\\1a&HC0&\\p1}m %d %d l %d %d l %d %d l %d %d{\\p0}',
+		track_x1, track_y, track_x2, track_y, track_x2, track_y + 3, track_x1, track_y + 3
+	))
+	-- progress fill
+	local fill_x = track_x1 + math.floor(track_w * progress)
+	if fill_x > track_x1 then
+		ass:new_event()
+		ass:append(string.format(
+			'{\\an7\\pos(0,0)\\bord0\\shad0\\1c&H%s&\\1a&H10&\\p1}m %d %d l %d %d l %d %d l %d %d{\\p0}',
+			pf_bgr,
+			track_x1, track_y, fill_x, track_y, fill_x, track_y + 3, track_x1, track_y + 3
+		))
+	end
+
+	return ass
+end
+-- ===== /Liquid Glass skin patch =====
+
 function Controls:destroy_elements()
 	for _, control in ipairs(self.controls) do
 		if control.element then control.element:destroy() end
