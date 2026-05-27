@@ -649,11 +649,24 @@ function Controls:render()
 
 	-- Quality button: shows current resolution + opens quality picker.
 	local vid_h = mp.get_property_number('video-params/h', 0)
-	local quality_label = vid_h > 0 and tostring(vid_h) .. 'p' or 'HD'
-	local quality_w = math.max(btn_w + 16, #quality_label * 10 + 20)
+	local vid_w = mp.get_property_number('video-params/w', 0)
+	local quality_label = 'HD'
+	if vid_h >= 4320 then quality_label = '8K'
+	elseif vid_h >= 2160 then quality_label = '4K'
+	elseif vid_h >= 1440 then quality_label = '1440p'
+	elseif vid_h >= 1080 then quality_label = '1080p'
+	elseif vid_h >= 720 then quality_label = '720p'
+	elseif vid_h >= 480 then quality_label = '480p'
+	elseif vid_h >= 360 then quality_label = '360p'
+	elseif vid_h >= 240 then quality_label = '240p'
+	elseif vid_h >= 144 then quality_label = '144p'
+	elseif vid_h > 0 then quality_label = tostring(vid_h) .. 'p'
+	end
+	local quality_fs = is_narrow and 17 or 20
+	local quality_w = math.max(btn_w + 20, #quality_label * 12 + 24)
 	local quality_rect = {ax = cx, ay = btn_row_y, bx = cx + quality_w, by = btn_row_y + btn_h}
 	local quality_hover = get_point_to_rectangle_proximity(cursor, quality_rect) == 0
-	draw_text_button(cx, btn_row_y, quality_w, btn_h, quality_label, quality_hover, 15)
+	draw_text_button(cx, btn_row_y, quality_w, btn_h, quality_label, quality_hover, quality_fs)
 	cx = cx + quality_w + block_gap
 
 	-- Time + percentage in one block.
@@ -796,7 +809,24 @@ function Controls:render()
 			}))
 		end)
 		cursor:zone('primary_down', quality_rect, function()
-			mp.command('script-binding uosc/stream-quality')
+			local path = mp.get_property('path', '')
+			local is_stream = path:match('^https?://') or path:match('^ytdl://')
+			if is_stream then
+				mp.command('script-binding uosc/stream-quality')
+			else
+				local vw = mp.get_property_number('video-params/w', 0)
+				local vh = mp.get_property_number('video-params/h', 0)
+				local codec = mp.get_property('video-codec', '?')
+				local fps = mp.get_property_number('container-fps', 0)
+				local fps_str = fps > 0 and string.format('%.1f fps', fps) or ''
+				local br = mp.get_property_number('video-bitrate', 0)
+				local br_str = br > 0 and string.format('%.1f Mbps', br / 1000000) or ''
+				local info = string.format('%dx%d  %s  %s  %s', vw, vh, codec, fps_str, br_str)
+				mp.commandv('script-message-to', 'uosc', 'open-menu', require('mp.utils').format_json({
+					type = 'lg_quality', title = 'Video Quality',
+					items = {{title = info, value = '', active = true}}
+				}))
+			end
 		end)
 		cursor:zone('primary_down', vol_icon_rect, function() mp.commandv('cycle', 'mute') end)
 		cursor:zone('primary_down', vol_slider_rect, function()
@@ -805,26 +835,9 @@ function Controls:render()
 			mp.commandv('set', 'volume', math.floor(frac * (state.volume_max or 100)))
 		end)
 
-		-- Scroll: volume block = volume OSD, progress bar = seek OSD.
-		-- Only one OSD at a time (#4 mutual exclusion).
-		local function vol_scroll(delta)
-			local new_vol = math.max(0, math.min((state.volume or 0) + delta, state.volume_max or 100))
-			mp.commandv('no-osd', 'set', 'volume', new_vol)
-			self._lg_vol_osd_until = mp.get_time() + 2
-			self._lg_seek_osd_until = 0
-			request_render()
-		end
-		cursor:zone('wheel_up', vol_block_rect, function() vol_scroll(5) end)
-		cursor:zone('wheel_down', vol_block_rect, function() vol_scroll(-5) end)
-
-		local function seek_scroll(delta)
-			mp.commandv('no-osd', 'seek', delta, 'relative+exact')
-			self._lg_seek_osd_until = mp.get_time() + 2
-			self._lg_vol_osd_until = 0
-			request_render()
-		end
-		cursor:zone('wheel_up', progress_hitbox, function() seek_scroll(5) end)
-		cursor:zone('wheel_down', progress_hitbox, function() seek_scroll(-5) end)
+		-- All scroll handling is routed through input.conf → lg-scroll-up/down
+		-- script messages (global handler below). No cursor:zone wheel
+		-- registrations here — they would intercept events before input.conf.
 
 		-- Progress bar click-to-seek + drag scrub.
 		local seek_ax = trk_ax
@@ -881,15 +894,15 @@ function Controls:render()
 		end
 		ass:new_event()
 		ass:append(string.format(
-			'{\\an5\\pos(%d,%d)\\fnMaterialIconsRound-Regular\\fs72\\bord0\\shad0\\1c&H%s&}%s',
-			win_cx, win_cy - 22, ink_bgr, vol_icon_name
+			'{\\an5\\pos(%d,%d)\\fnMaterialIconsRound-Regular\\fs90\\bord0\\shad0\\1c&H%s&}%s',
+			win_cx, win_cy - 18, ink_bgr, vol_icon_name
 		))
 		-- Volume percentage below
 		local vol_text = tostring(math.floor((state.volume or 0) + 0.5)) .. ' %'
 		ass:new_event()
 		ass:append(string.format(
 			'{\\an5\\pos(%d,%d)\\fnGeist\\fs28\\b1\\bord0\\shad0\\1c&H%s&}%s',
-			win_cx, win_cy + 48, ink_bgr, vol_text
+			win_cx, win_cy + 52, ink_bgr, vol_text
 		))
 		if now < self._lg_vol_osd_until - 0.05 then request_render() end
 	end
@@ -902,11 +915,11 @@ function Controls:render()
 			x = osd_x, y = osd_y, w = osd_w, h = osd_h, r = 28,
 			intensity = lg.intensity * 1.8, show_frost = lg.show_frost, shadow_blur = 40,
 		})
-		-- Big video camera icon
+		-- Big video camera icon (larger to fill the block better)
 		ass:new_event()
 		ass:append(string.format(
-			'{\\an5\\pos(%d,%d)\\fnMaterialIconsRound-Regular\\fs72\\bord0\\shad0\\1c&H%s&}videocam',
-			win_cx, win_cy - 22, ink_bgr
+			'{\\an5\\pos(%d,%d)\\fnMaterialIconsRound-Regular\\fs90\\bord0\\shad0\\1c&H%s&}videocam',
+			win_cx, win_cy - 18, ink_bgr
 		))
 		-- Progress percentage below
 		local seek_pct = (state.duration and state.duration > 0)
@@ -915,7 +928,7 @@ function Controls:render()
 		ass:new_event()
 		ass:append(string.format(
 			'{\\an5\\pos(%d,%d)\\fnGeist\\fs28\\b1\\bord0\\shad0\\1c&H%s&}%s',
-			win_cx, win_cy + 48, ink_bgr, seek_text
+			win_cx, win_cy + 52, ink_bgr, seek_text
 		))
 		if now < self._lg_seek_osd_until - 0.05 then request_render() end
 	end
