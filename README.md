@@ -14,10 +14,8 @@ See [docs/customization.md](docs/customization.md).
 MIT (own code). Vendors uosc, which is LGPL-2.1; see `portable_config/scripts/uosc/LICENSE.LGPL` for attribution.
 
 ## Status
-**Milestone 1 complete** (pre-alpha, awaiting visual smoke test).
+**Milestone 2 complete:** Top bar, timeline, and volume slider all restyled as Liquid Glass. Icon set expanded from 4 to 22. Spring motion library wired into TopBar visibility fade and play-pebble hover. 29 busted tests passing.
 
-Foundation libraries built and unit-tested (`theme`, `motion`, `icons`, `glass` in `portable_config/scripts/uosc/lib/liquid/`). uosc 5.9.2 vendored and patched to render the bottom control bar as three Liquid Glass pebbles (play / time / progress). 26 busted tests passing. mpv loads the skin without errors or warnings.
+To verify: `mpv --config-dir=portable_config <some-video>`.
 
-**Pending:** human visual confirmation that the pebbles render correctly on real video. To verify: `mpv --config-dir=portable_config <some-video>`.
-
-**Next milestone:** restyle the top bar, timeline, volume popup, and menus.
+**Next milestone:** menus, playlist, settings, pickers.
