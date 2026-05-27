@@ -508,26 +508,26 @@ function Controls:render()
 	end
 
 	-- ==================== LAYOUT ====================
-	-- Full control area from self.ax to self.bx, bottom-pinned to self.by.
-	local pad_x = 16
+	local pad_x = 12
 	local area_ax = self.ax + pad_x
 	local area_bx = self.bx - pad_x
 	local area_w  = area_bx - area_ax
 
 	-- Sizes
-	local btn_h = 40
-	local btn_w = 40
-	local btn_gap = 10
-	local progress_h = 14
+	local btn_h = 36
+	local btn_w = 36
+	local btn_gap = 6
+	local block_gap = 14
+	local progress_h = 10
 	local progress_r = progress_h / 2
-	local row_gap = 10
-	local vol_slider_w = 100
+	local row_gap = 6
 
-	-- Vertical positions: progress bar on top, button row below.
-	local btn_row_y = self.by - btn_h - 8
+	-- #9: lower the controls — pin closer to bottom edge.
+	local btn_row_y = self.by - btn_h - 4
 	local progress_y = btn_row_y - row_gap - progress_h
 
-	-- ==================== 1. PROGRESS BAR (full width, glass strip) ====================
+	-- ==================== 1. PROGRESS BAR ====================
+	-- #1: glass-tinted colors (white glow, not harsh orange).
 	draw_glass({
 		x = area_ax, y = progress_y, w = area_w, h = progress_h, r = progress_r,
 		intensity = lg.intensity, show_frost = lg.show_frost,
@@ -537,45 +537,44 @@ function Controls:render()
 		and ((state.time or 0) / state.duration) or 0
 	if progress < 0 then progress = 0 elseif progress > 1 then progress = 1 end
 
-	-- Track background
-	local trk_inset = 3
+	local trk_inset = 2
 	local trk_h = progress_h - trk_inset * 2
 	local trk_ax = area_ax + trk_inset
 	local trk_bx = area_bx - trk_inset
 	local trk_y  = progress_y + trk_inset
 	local trk_w  = trk_bx - trk_ax
-	emit_pill(trk_ax, trk_y, trk_bx, trk_h, 'FFFFFF', '&H80&')
 
-	-- Progress fill (accent color)
+	-- Track background: subtle white.
+	emit_pill(trk_ax, trk_y, trk_bx, trk_h, 'FFFFFF', '&H90&')
+
+	-- Progress fill: bright white glow (glass-like).
 	local fill_x = trk_ax + math.floor(trk_w * progress)
 	if fill_x > trk_ax + trk_h then
-		emit_pill(trk_ax, trk_y, fill_x, trk_h, accent_bgr, '&H20&')
+		emit_pill(trk_ax, trk_y, fill_x, trk_h, 'FFFFFF', '&H20&')
 	end
 
-	-- Progress bar hitbox (full glass strip area for easier clicking)
 	local progress_hitbox = {ax = area_ax, ay = progress_y, bx = area_bx, by = progress_y + progress_h}
 
-	-- Chapter ticks on progress bar
+	-- Chapter ticks
 	if state.chapters and #state.chapters > 0 and state.duration and state.duration > 0 then
 		for _, chapter in ipairs(state.chapters) do
 			if chapter.time > 0 and chapter.time < state.duration then
 				local tx = trk_ax + math.floor(trk_w * (chapter.time / state.duration))
 				ass:new_event()
 				ass:append(string.format(
-					'{\\an7\\pos(0,0)\\bord0\\shad0\\1c&HFFFFFF&\\1a&H60&\\p1}m %d %d l %d %d l %d %d l %d %d{\\p0}',
-					tx, trk_y, tx + 1, trk_y,
-					tx + 1, trk_y + trk_h, tx, trk_y + trk_h
+					'{\\an7\\pos(0,0)\\bord0\\shad0\\1c&HFFFFFF&\\1a&H50&\\p1}m %d %d l %d %d l %d %d l %d %d{\\p0}',
+					tx, trk_y, tx + 2, trk_y,
+					tx + 2, trk_y + trk_h, tx, trk_y + trk_h
 				))
 			end
 		end
 	end
 
 	-- ==================== 2. BUTTON ROW ====================
-	-- Left side: Play | Prev | Next | Volume icon | Volume slider | Time
-	-- Right side: Settings | Fullscreen
-	local cx = area_ax  -- cursor X for laying out buttons left-to-right
+	-- Layout: Play | gap | [Prev Next] block | [Time] block | [Vol icon + slider] | ... | [Sub] [Settings] [Fullscreen]
+	local cx = area_ax
 
-	-- Play / pause button (with spring hover-scale)
+	-- Play / pause (standalone, with spring hover-scale).
 	local play_rect = {ax = cx, ay = btn_row_y, bx = cx + btn_w, by = btn_row_y + btn_h}
 	local is_play_hover = get_point_to_rectangle_proximity(cursor, play_rect) == 0
 	local hover_target = is_play_hover and 1 or 0
@@ -588,10 +587,10 @@ function Controls:render()
 	local play_scale = 1 + 0.06 * hover_t
 	local sw = btn_w * play_scale
 	local sh = btn_h * play_scale
-	local sx = cx - (sw - btn_w) / 2
-	local sy = btn_row_y - (sh - btn_h) / 2
+	local sxp = cx - (sw - btn_w) / 2
+	local syp = btn_row_y - (sh - btn_h) / 2
 	draw_glass({
-		x = sx, y = sy, w = sw, h = sh, r = sh / 2,
+		x = sxp, y = syp, w = sw, h = sh, r = sh / 2,
 		intensity = lg.intensity * (1 + 0.2 * hover_t),
 		show_frost = lg.show_frost,
 	})
@@ -604,75 +603,117 @@ function Controls:render()
 			'{\\an7\\pos(%d,%d)\\bord0\\shad0\\1c&H%s&\\1a&H0F&\\fscx%d\\fscy%d\\p1}%s{\\p0}',
 			cx + (btn_w - 24 * pscale) / 2,
 			btn_row_y + (btn_h - 24 * pscale) / 2,
-			ink_bgr,
-			pscale * 100, pscale * 100,
+			ink_bgr, pscale * 100, pscale * 100,
 			play_icon_path
 		))
 	end
-	cx = cx + btn_w + btn_gap
+	cx = cx + btn_w + block_gap
 
-	-- Previous button
+	-- #2: Prev + Next grouped in one glass block.
+	local pn_block_w = btn_w * 2 + 4
+	local pn_block_x = cx
+	draw_glass({
+		x = cx, y = btn_row_y, w = pn_block_w, h = btn_h, r = btn_h / 2,
+		intensity = lg.intensity, show_frost = lg.show_frost,
+	})
+	-- Prev icon (left half)
 	local prev_rect = {ax = cx, ay = btn_row_y, bx = cx + btn_w, by = btn_row_y + btn_h}
-	local prev_hover = get_point_to_rectangle_proximity(cursor, prev_rect) == 0
-	draw_button(cx, btn_row_y, btn_w, btn_h, 'prev', prev_hover)
-	cx = cx + btn_w + btn_gap
+	local prev_icon_path = liquid_icons_lib.get('prev')
+	if prev_icon_path then
+		local iscale = (btn_h * 0.45) / 24
+		ass:new_event()
+		ass:append(string.format(
+			'{\\an7\\pos(%d,%d)\\bord0\\shad0\\1c&H%s&\\1a&H10&\\fscx%d\\fscy%d\\p1}%s{\\p0}',
+			cx + (btn_w - 24 * iscale) / 2,
+			btn_row_y + (btn_h - 24 * iscale) / 2,
+			ink_bgr, iscale * 100, iscale * 100,
+			prev_icon_path
+		))
+	end
+	-- Next icon (right half)
+	local next_cx = cx + btn_w + 4
+	local next_rect = {ax = next_cx, ay = btn_row_y, bx = next_cx + btn_w, by = btn_row_y + btn_h}
+	local next_icon_path = liquid_icons_lib.get('next')
+	if next_icon_path then
+		local iscale = (btn_h * 0.45) / 24
+		ass:new_event()
+		ass:append(string.format(
+			'{\\an7\\pos(%d,%d)\\bord0\\shad0\\1c&H%s&\\1a&H10&\\fscx%d\\fscy%d\\p1}%s{\\p0}',
+			next_cx + (btn_w - 24 * iscale) / 2,
+			btn_row_y + (btn_h - 24 * iscale) / 2,
+			ink_bgr, iscale * 100, iscale * 100,
+			next_icon_path
+		))
+	end
+	cx = cx + pn_block_w + block_gap
 
-	-- Next button
-	local next_rect = {ax = cx, ay = btn_row_y, bx = cx + btn_w, by = btn_row_y + btn_h}
-	local next_hover = get_point_to_rectangle_proximity(cursor, next_rect) == 0
-	draw_button(cx, btn_row_y, btn_w, btn_h, 'next', next_hover)
-	cx = cx + btn_w + btn_gap
+	-- #4: Time readout in its own glass block with bigger text.
+	local time_str = string.format('%s / %s',
+		_lg_format_time(state.time or 0),
+		_lg_format_time(state.duration or 0))
+	local time_block_w = math.max(120, #time_str * 11)
+	draw_glass({
+		x = cx, y = btn_row_y, w = time_block_w, h = btn_h, r = btn_h / 2,
+		intensity = lg.intensity * 0.9, show_frost = lg.show_frost,
+	})
+	ass:new_event()
+	ass:append(string.format(
+		'{\\an5\\pos(%d,%d)\\fnGeist Mono\\fs18\\fsp0.5\\bord0\\shad0\\1c&H%s&}%s',
+		cx + time_block_w / 2,
+		btn_row_y + btn_h / 2,
+		ink_bgr,
+		time_str
+	))
+	cx = cx + time_block_w + block_gap
 
-	-- Volume icon button
+	-- #5: Volume icon + horizontal slider in one glass block.
+	local vol_slider_w = 120
+	local vol_block_w = btn_w + 4 + vol_slider_w
+	local vol_block_x = cx
+	draw_glass({
+		x = cx, y = btn_row_y, w = vol_block_w, h = btn_h, r = btn_h / 2,
+		intensity = lg.intensity * 0.9, show_frost = lg.show_frost,
+	})
+	-- Volume icon (left side of block)
 	local vol_icon_rect = {ax = cx, ay = btn_row_y, bx = cx + btn_w, by = btn_row_y + btn_h}
-	local vol_hover = get_point_to_rectangle_proximity(cursor, vol_icon_rect) == 0
 	local vol_icon = 'volume_up'
 	if state.mute then vol_icon = 'volume_off'
 	elseif (state.volume or 0) <= 0 then vol_icon = 'volume_mute'
 	elseif (state.volume or 0) <= 60 then vol_icon = 'volume_down'
 	end
-	draw_button(cx, btn_row_y, btn_w, btn_h, vol_icon, vol_hover)
-	cx = cx + btn_w + btn_gap
-
-	-- Horizontal volume slider (glass pill with accent fill)
-	local vol_slider_h = btn_h - 12
-	local vol_slider_y = btn_row_y + (btn_h - vol_slider_h) / 2
-	local vol_slider_r = vol_slider_h / 2
-	draw_glass({
-		x = cx, y = vol_slider_y, w = vol_slider_w, h = vol_slider_h, r = vol_slider_r,
-		intensity = lg.intensity * 0.8, show_frost = lg.show_frost,
-	})
+	local vol_icon_path = liquid_icons_lib.get(vol_icon)
+	if vol_icon_path then
+		local vscale = (btn_h * 0.45) / 24
+		ass:new_event()
+		ass:append(string.format(
+			'{\\an7\\pos(%d,%d)\\bord0\\shad0\\1c&H%s&\\1a&H10&\\fscx%d\\fscy%d\\p1}%s{\\p0}',
+			cx + (btn_w - 24 * vscale) / 2,
+			btn_row_y + (btn_h - 24 * vscale) / 2,
+			ink_bgr, vscale * 100, vscale * 100,
+			vol_icon_path
+		))
+	end
+	-- Volume slider track (right side of block)
+	local vs_ax = cx + btn_w + 4
+	local vs_bx = cx + vol_block_w - 8
+	local vs_h = 6
+	local vs_y = btn_row_y + (btn_h - vs_h) / 2
+	emit_pill(vs_ax, vs_y, vs_bx, vs_h, 'FFFFFF', '&H80&')
+	-- Volume fill (white glow)
 	local vol_frac = math.min((state.volume or 0) / (state.volume_max or 100), 1)
 	if vol_frac < 0 then vol_frac = 0 end
-	local vol_fill_inset = 3
-	local vol_fill_ax = cx + vol_fill_inset
-	local vol_fill_bx = cx + vol_slider_w - vol_fill_inset
-	local vol_fill_w = vol_fill_bx - vol_fill_ax
-	local vol_fill_h = vol_slider_h - vol_fill_inset * 2
-	local vol_fill_y = vol_slider_y + vol_fill_inset
-	local vol_filled_x = vol_fill_ax + math.floor(vol_fill_w * vol_frac)
-	if vol_filled_x > vol_fill_ax + vol_fill_h then
-		emit_pill(vol_fill_ax, vol_fill_y, vol_filled_x, vol_fill_h, accent_bgr, '&H30&')
+	local vol_fill_w = vs_bx - vs_ax
+	local vol_filled_x = vs_ax + math.floor(vol_fill_w * vol_frac)
+	if vol_filled_x > vs_ax + vs_h then
+		emit_pill(vs_ax, vs_y, vol_filled_x, vs_h, 'FFFFFF', '&H20&')
 	end
-	local vol_slider_rect = {ax = cx, ay = btn_row_y, bx = cx + vol_slider_w, by = btn_row_y + btn_h}
-	cx = cx + vol_slider_w + btn_gap + 6
+	local vol_slider_rect = {ax = vs_ax, ay = btn_row_y, bx = vs_bx, by = btn_row_y + btn_h}
+	cx = cx + vol_block_w + block_gap
 
-	-- Time readout (plain text, no pebble — keeps it light)
-	local time_str = string.format('%s / %s',
-		_lg_format_time(state.time or 0),
-		_lg_format_time(state.duration or 0))
-	ass:new_event()
-	ass:append(string.format(
-		'{\\an4\\pos(%d,%d)\\fnGeist Mono\\fs16\\bord0\\shad0\\1c&H%s&\\1a&H10&}%s',
-		cx, btn_row_y + btn_h / 2,
-		ink_bgr,
-		time_str
-	))
+	-- Right-side buttons: Sub | Settings | Fullscreen
+	local rx = area_bx
 
-	-- Right-side buttons: Fullscreen (rightmost), Settings (second from right)
-	local rx = area_bx  -- cursor from the right edge
-
-	-- Fullscreen button
+	-- Fullscreen
 	rx = rx - btn_w
 	local fs_rect = {ax = rx, ay = btn_row_y, bx = rx + btn_w, by = btn_row_y + btn_h}
 	local fs_hover = get_point_to_rectangle_proximity(cursor, fs_rect) == 0
@@ -680,14 +721,14 @@ function Controls:render()
 	draw_button(rx, btn_row_y, btn_w, btn_h, fs_icon, fs_hover)
 	rx = rx - btn_gap
 
-	-- Settings button
+	-- Settings
 	rx = rx - btn_w
 	local settings_rect = {ax = rx, ay = btn_row_y, bx = rx + btn_w, by = btn_row_y + btn_h}
 	local settings_hover = get_point_to_rectangle_proximity(cursor, settings_rect) == 0
 	draw_button(rx, btn_row_y, btn_w, btn_h, 'settings', settings_hover)
 	rx = rx - btn_gap
 
-	-- Subtitle button
+	-- Subtitle
 	rx = rx - btn_w
 	local sub_rect = {ax = rx, ay = btn_row_y, bx = rx + btn_w, by = btn_row_y + btn_h}
 	local sub_hover = get_point_to_rectangle_proximity(cursor, sub_rect) == 0
@@ -695,12 +736,10 @@ function Controls:render()
 
 	-- ==================== 3. INTERACTIVITY ====================
 	if cursor and cursor.zone then
-		-- Play / pause
 		cursor:zone('primary_down', play_rect, function()
 			mp.commandv('cycle', 'pause')
 		end)
 
-		-- Previous / Next
 		cursor:zone('primary_down', prev_rect, function()
 			mp.command('playlist-prev')
 		end)
@@ -708,19 +747,15 @@ function Controls:render()
 			mp.command('playlist-next')
 		end)
 
-		-- Volume icon: toggle mute
 		cursor:zone('primary_down', vol_icon_rect, function()
 			mp.commandv('cycle', 'mute')
 		end)
 
-		-- Volume slider: click to set volume
 		cursor:zone('primary_down', vol_slider_rect, function()
-			local frac = (cursor.x - vol_fill_ax) / vol_fill_w
+			local frac = (cursor.x - vs_ax) / vol_fill_w
 			if frac < 0 then frac = 0 elseif frac > 1 then frac = 1 end
 			mp.commandv('set', 'volume', math.floor(frac * (state.volume_max or 100)))
 		end)
-
-		-- Volume scroll on the slider area
 		cursor:zone('wheel_up', vol_slider_rect, function()
 			mp.commandv('set', 'volume', math.min((state.volume or 0) + 5, state.volume_max or 100))
 		end)
@@ -728,7 +763,6 @@ function Controls:render()
 			mp.commandv('set', 'volume', math.max((state.volume or 0) - 5, 0))
 		end)
 
-		-- Progress bar: click to seek + drag to scrub
 		local seek_ax = trk_ax
 		local seek_w  = trk_w
 		local function seek_to_cursor(fast)
@@ -751,17 +785,12 @@ function Controls:render()
 		end)
 		self._lg_seek_handler = seek_to_cursor
 
-		-- Fullscreen toggle
 		cursor:zone('primary_down', fs_rect, function()
 			mp.commandv('cycle', 'fullscreen')
 		end)
-
-		-- Settings menu
 		cursor:zone('primary_down', settings_rect, function()
 			mp.command('script-binding uosc/menu')
 		end)
-
-		-- Subtitle picker
 		cursor:zone('primary_down', sub_rect, function()
 			mp.command('script-binding uosc/subtitles')
 		end)

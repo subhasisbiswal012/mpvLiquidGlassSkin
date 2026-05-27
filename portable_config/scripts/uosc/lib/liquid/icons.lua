@@ -14,9 +14,11 @@ local PLAY = 'm 7 6.5 l 7 17.5 b 7 19 7 19 8.3 18.25 l 17.7 12.75 b 19 12 19 12 
 
 local PAUSE = 'm 7 5.5 b 7 4 10 4 10 5.5 l 10 18.5 b 10 20 7 20 7 18.5 l 7 5.5 m 14 5.5 b 14 4 17 4 17 5.5 l 17 18.5 b 17 20 14 20 14 18.5 l 14 5.5'
 
-local PREV = 'm 8 12 l 18 4 l 18 20 m 6 4 l 6 20'
+-- Skip backward: double left chevron (clearly different from play triangle).
+local PREV = 'm 11 12 l 19 6 l 19 18 l 11 12 m 5 12 l 13 6 l 13 18 l 5 12'
 
-local NEXT_ = 'm 16 12 l 6 4 l 6 20 m 18 4 l 18 20'
+-- Skip forward: double right chevron.
+local NEXT_ = 'm 13 12 l 5 6 l 5 18 l 13 12 m 19 12 l 11 6 l 11 18 l 19 12'
 
 -- ===== M2 icons =====
 
@@ -27,34 +29,38 @@ local REWIND_10 =
   'm 12 4 l 12 7 l 7 7 b 5 7 3 9 3 12 b 3 16 7 19 11 19 b 15 19 19 16 19 12 ' ..
   'm 9 10 l 9 16 m 11 11 b 11 10 15 10 15 13 b 15 16 11 16 11 15'
 
-local _SPEAKER = 'm 4 10 b 4 9 5 9 5 9 l 8 9 l 12 5 b 13 5 13 5 13 6 l 13 18 b 13 19 13 19 12 19 l 8 15 l 5 15 b 4 15 4 15 4 14 l 4 10'
+-- Bold speaker: wider body for visibility at small sizes.
+local _SPEAKER = 'm 3 9 l 7 9 l 13 4 l 13 20 l 7 15 l 3 15 l 3 9'
 
-local VOLUME_OFF = _SPEAKER .. ' m 16 8 l 22 16 m 22 8 l 16 16'
+local VOLUME_OFF = _SPEAKER .. ' m 17 8 l 23 16 m 23 8 l 17 16'
 local VOLUME_MUTE = _SPEAKER
-local VOLUME_DOWN = _SPEAKER .. ' m 16 10 b 18 11 18 13 16 14'
+local VOLUME_DOWN = _SPEAKER .. ' m 16 9 b 19 10.5 19 13.5 16 15'
 local VOLUME_UP = _SPEAKER ..
-  ' m 16 10 b 18 11 18 13 16 14' ..
-  ' m 18 7 b 22 9 22 15 18 17'
+  ' m 16 9 b 19 10.5 19 13.5 16 15' ..
+  ' m 18 5 b 23 8 23 16 18 19'
 
+-- Fullscreen: bold corner brackets (3px thick L-shapes).
 local FULLSCREEN_ENTER =
-  'm 4 9 l 4 4 l 9 4 ' ..
-  'm 20 9 l 20 4 l 15 4 ' ..
-  'm 4 15 l 4 20 l 9 20 ' ..
-  'm 20 15 l 20 20 l 15 20'
+  'm 3 3 l 9 3 l 9 5 l 5 5 l 5 9 l 3 9 l 3 3 ' ..
+  'm 15 3 l 21 3 l 21 9 l 19 9 l 19 5 l 15 5 l 15 3 ' ..
+  'm 3 15 l 5 15 l 5 19 l 9 19 l 9 21 l 3 21 l 3 15 ' ..
+  'm 19 15 l 21 15 l 21 21 l 15 21 l 15 19 l 19 19 l 19 15'
 
 local FULLSCREEN_EXIT =
-  'm 4 9 l 9 9 l 9 4 ' ..
-  'm 20 9 l 15 9 l 15 4 ' ..
-  'm 4 15 l 9 15 l 9 20 ' ..
-  'm 20 15 l 15 15 l 15 20'
+  'm 3 8 l 8 8 l 8 3 l 10 3 l 10 10 l 3 10 l 3 8 ' ..
+  'm 14 3 l 16 3 l 16 8 l 21 8 l 21 10 l 14 10 l 14 3 ' ..
+  'm 3 14 l 10 14 l 10 21 l 8 21 l 8 16 l 3 16 l 3 14 ' ..
+  'm 14 14 l 21 14 l 21 16 l 16 16 l 16 21 l 14 21 l 14 14'
 
 local PIP =
   'm 3 5 l 21 5 b 22 5 22 5 22 6 l 22 18 b 22 19 22 19 21 19 l 3 19 b 2 19 2 19 2 18 l 2 6 b 2 5 2 5 3 5 ' ..
   'm 13 12 l 20 12 l 20 17 l 13 17 l 13 12'
 
+-- Subtitle: rounded rect with two subtitle text lines at bottom.
 local SUBTITLE =
-  'm 3 6 l 21 6 b 22 6 22 6 22 7 l 22 17 b 22 18 22 18 21 18 l 3 18 b 2 18 2 18 2 17 l 2 7 b 2 6 2 6 3 6 ' ..
-  'm 5 13 l 10 13 m 12 13 l 18 13'
+  'm 4 5 l 20 5 b 21 5 22 6 22 7 l 22 17 b 22 18 21 19 20 19 l 4 19 b 3 19 2 18 2 17 l 2 7 b 2 6 3 5 4 5 ' ..
+  'm 5 13 l 19 13 l 19 14 l 5 14 l 5 13 ' ..
+  'm 7 16 l 17 16 l 17 17 l 7 17 l 7 16'
 
 local AUDIO_TRACK =
   'm 10 6 l 18 5 l 18 16 ' ..
@@ -71,12 +77,14 @@ local PLAYLIST =
   'm 4 12 l 20 12 ' ..
   'm 4 17 l 16 17'
 
+-- Settings: three horizontal bars with slider knobs (equalizer style).
 local SETTINGS =
-  'm 12 5 l 14 5 l 15 7 l 17 7 l 18 9 l 20 10 l 20 12 ' ..
-  'l 20 12 l 20 14 l 18 15 l 17 17 l 15 17 l 14 19 l 12 19 ' ..
-  'l 10 19 l 9 17 l 7 17 l 6 15 l 4 14 l 4 12 ' ..
-  'l 4 10 l 6 9 l 7 7 l 9 7 l 10 5 l 12 5 ' ..
-  'm 12 9 b 15 9 15 15 12 15 b 9 15 9 9 12 9'
+  'm 4 6 l 20 6 l 20 8 l 4 8 l 4 6 ' ..
+  'm 14 4 l 17 4 l 17 10 l 14 10 l 14 4 ' ..
+  'm 4 11 l 20 11 l 20 13 l 4 13 l 4 11 ' ..
+  'm 7 9 l 10 9 l 10 15 l 7 15 l 7 9 ' ..
+  'm 4 16 l 20 16 l 20 18 l 4 18 l 4 16 ' ..
+  'm 15 14 l 18 14 l 18 20 l 15 20 l 15 14'
 
 local CLOSE = 'm 5 5 l 19 19 m 19 5 l 5 19'
 
