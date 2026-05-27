@@ -717,6 +717,7 @@ function Controls:render()
 	))
 	local vol_slider_rect = {ax = vs_ax, ay = btn_row_y, bx = vs_bx, by = btn_row_y + btn_h}
 	local vol_block_rect = {ax = vol_block_x, ay = btn_row_y, bx = vol_block_x + vol_block_w, by = btn_row_y + btn_h}
+	self._lg_vol_block_rect = vol_block_rect
 	cx = cx + vol_block_w + block_gap
 
 	-- Right-side buttons. On narrow screens, use row 2.
@@ -804,11 +805,13 @@ function Controls:render()
 			mp.commandv('set', 'volume', math.floor(frac * (state.volume_max or 100)))
 		end)
 
-		-- Scroll: volume block = volume (with centered OSD), progress bar = seek (with centered OSD).
+		-- Scroll: volume block = volume OSD, progress bar = seek OSD.
+		-- Only one OSD at a time (#4 mutual exclusion).
 		local function vol_scroll(delta)
 			local new_vol = math.max(0, math.min((state.volume or 0) + delta, state.volume_max or 100))
 			mp.commandv('no-osd', 'set', 'volume', new_vol)
 			self._lg_vol_osd_until = mp.get_time() + 2
+			self._lg_seek_osd_until = 0
 			request_render()
 		end
 		cursor:zone('wheel_up', vol_block_rect, function() vol_scroll(5) end)
@@ -817,6 +820,7 @@ function Controls:render()
 		local function seek_scroll(delta)
 			mp.commandv('no-osd', 'seek', delta, 'relative+exact')
 			self._lg_seek_osd_until = mp.get_time() + 2
+			self._lg_vol_osd_until = 0
 			request_render()
 		end
 		cursor:zone('wheel_up', progress_hitbox, function() seek_scroll(5) end)
@@ -852,58 +856,66 @@ function Controls:render()
 	end
 
 	-- ==================== 4. CENTERED OSD OVERLAYS (macOS style) ====================
+	-- Centered on the full player window, not the controls area.
 	local now = mp.get_time()
-	local screen_cx = (self.ax + self.bx) / 2
-	local screen_cy = (self.ay + self.by) / 2 - 60
+	local win_cx = display.width / 2
+	local win_cy = display.height / 2
 
-	-- Volume OSD: big speaker icon + volume %
-	if now < self._lg_vol_osd_until then
-		local osd_w, osd_h = 160, 120
-		local osd_x = screen_cx - osd_w / 2
-		local osd_y = screen_cy - osd_h / 2
+	-- Only one OSD at a time: volume takes priority if both are active.
+	local show_vol_osd = now < self._lg_vol_osd_until
+	local show_seek_osd = (not show_vol_osd) and now < self._lg_seek_osd_until
+
+	if show_vol_osd then
+		local osd_w, osd_h = 220, 180
+		local osd_x = win_cx - osd_w / 2
+		local osd_y = win_cy - osd_h / 2
 		draw_glass({
-			x = osd_x, y = osd_y, w = osd_w, h = osd_h, r = 20,
-			intensity = lg.intensity * 1.5, show_frost = lg.show_frost, shadow_blur = 30,
+			x = osd_x, y = osd_y, w = osd_w, h = osd_h, r = 28,
+			intensity = lg.intensity * 1.8, show_frost = lg.show_frost, shadow_blur = 40,
 		})
 		-- Big speaker icon
+		local vol_icon_name = 'volume_up'
+		if state.mute then vol_icon_name = 'volume_off'
+		elseif (state.volume or 0) <= 0 then vol_icon_name = 'volume_mute'
+		elseif (state.volume or 0) <= 60 then vol_icon_name = 'volume_down'
+		end
 		ass:new_event()
 		ass:append(string.format(
-			'{\\an5\\pos(%d,%d)\\fnMaterialIconsRound-Regular\\fs52\\bord0\\shad0\\1c&H%s&}volume_up',
-			screen_cx, screen_cy - 14, ink_bgr
+			'{\\an5\\pos(%d,%d)\\fnMaterialIconsRound-Regular\\fs72\\bord0\\shad0\\1c&H%s&}%s',
+			win_cx, win_cy - 22, ink_bgr, vol_icon_name
 		))
 		-- Volume percentage below
 		local vol_text = tostring(math.floor((state.volume or 0) + 0.5)) .. ' %'
 		ass:new_event()
 		ass:append(string.format(
-			'{\\an5\\pos(%d,%d)\\fnGeist\\fs22\\b1\\bord0\\shad0\\1c&H%s&}%s',
-			screen_cx, screen_cy + 34, ink_bgr, vol_text
+			'{\\an5\\pos(%d,%d)\\fnGeist\\fs28\\b1\\bord0\\shad0\\1c&H%s&}%s',
+			win_cx, win_cy + 48, ink_bgr, vol_text
 		))
-		-- Keep rendering until timeout
 		if now < self._lg_vol_osd_until - 0.05 then request_render() end
 	end
 
-	-- Seek OSD: video camera icon + progress %
-	if now < self._lg_seek_osd_until then
-		local osd_w, osd_h = 160, 120
-		local osd_x = screen_cx - osd_w / 2
-		local osd_y = screen_cy - osd_h / 2
+	if show_seek_osd then
+		local osd_w, osd_h = 220, 180
+		local osd_x = win_cx - osd_w / 2
+		local osd_y = win_cy - osd_h / 2
 		draw_glass({
-			x = osd_x, y = osd_y, w = osd_w, h = osd_h, r = 20,
-			intensity = lg.intensity * 1.5, show_frost = lg.show_frost, shadow_blur = 30,
+			x = osd_x, y = osd_y, w = osd_w, h = osd_h, r = 28,
+			intensity = lg.intensity * 1.8, show_frost = lg.show_frost, shadow_blur = 40,
 		})
 		-- Big video camera icon
 		ass:new_event()
 		ass:append(string.format(
-			'{\\an5\\pos(%d,%d)\\fnMaterialIconsRound-Regular\\fs52\\bord0\\shad0\\1c&H%s&}videocam',
-			screen_cx, screen_cy - 14, ink_bgr
+			'{\\an5\\pos(%d,%d)\\fnMaterialIconsRound-Regular\\fs72\\bord0\\shad0\\1c&H%s&}videocam',
+			win_cx, win_cy - 22, ink_bgr
 		))
 		-- Progress percentage below
 		local seek_pct = (state.duration and state.duration > 0)
 			and math.floor(((state.time or 0) / state.duration) * 100) or 0
+		local seek_text = tostring(seek_pct) .. ' %'
 		ass:new_event()
 		ass:append(string.format(
-			'{\\an5\\pos(%d,%d)\\fnGeist\\fs22\\b1\\bord0\\shad0\\1c&H%s&}%d %s',
-			screen_cx, screen_cy + 34, ink_bgr, seek_pct, '%'
+			'{\\an5\\pos(%d,%d)\\fnGeist\\fs28\\b1\\bord0\\shad0\\1c&H%s&}%s',
+			win_cx, win_cy + 48, ink_bgr, seek_text
 		))
 		if now < self._lg_seek_osd_until - 0.05 then request_render() end
 	end
@@ -924,6 +936,46 @@ function Controls:on_global_mouse_leave()
 		self._lg_seek_drag = nil
 	end
 end
+
+-- Global scroll handler: input.conf routes WHEEL_UP/DOWN here.
+-- If cursor is over the volume block, adjust volume + show volume OSD.
+-- Otherwise, seek + show seek OSD.
+mp.register_script_message('lg-scroll-up', function()
+	local ctrl = Elements and Elements.controls
+	if not ctrl then mp.commandv('no-osd', 'seek', 5, 'relative+exact'); return end
+	-- Check if cursor is over the volume block area
+	if ctrl._lg_vol_block_rect and cursor and
+	   cursor.x >= ctrl._lg_vol_block_rect.ax and cursor.x <= ctrl._lg_vol_block_rect.bx and
+	   cursor.y >= ctrl._lg_vol_block_rect.ay and cursor.y <= ctrl._lg_vol_block_rect.by then
+		local new_vol = math.min((state.volume or 0) + 5, state.volume_max or 100)
+		mp.commandv('no-osd', 'set', 'volume', new_vol)
+		ctrl._lg_vol_osd_until = mp.get_time() + 2
+		ctrl._lg_seek_osd_until = 0
+	else
+		mp.commandv('no-osd', 'seek', 5, 'relative+exact')
+		ctrl._lg_seek_osd_until = mp.get_time() + 2
+		ctrl._lg_vol_osd_until = 0
+	end
+	request_render()
+end)
+
+mp.register_script_message('lg-scroll-down', function()
+	local ctrl = Elements and Elements.controls
+	if not ctrl then mp.commandv('no-osd', 'seek', -5, 'relative+exact'); return end
+	if ctrl._lg_vol_block_rect and cursor and
+	   cursor.x >= ctrl._lg_vol_block_rect.ax and cursor.x <= ctrl._lg_vol_block_rect.bx and
+	   cursor.y >= ctrl._lg_vol_block_rect.ay and cursor.y <= ctrl._lg_vol_block_rect.by then
+		local new_vol = math.max((state.volume or 0) - 5, 0)
+		mp.commandv('no-osd', 'set', 'volume', new_vol)
+		ctrl._lg_vol_osd_until = mp.get_time() + 2
+		ctrl._lg_seek_osd_until = 0
+	else
+		mp.commandv('no-osd', 'seek', -5, 'relative+exact')
+		ctrl._lg_seek_osd_until = mp.get_time() + 2
+		ctrl._lg_vol_osd_until = 0
+	end
+	request_render()
+end)
 -- ===== /Liquid Glass skin patch =====
 
 function Controls:destroy_elements()
