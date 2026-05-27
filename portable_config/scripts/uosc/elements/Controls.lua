@@ -417,6 +417,7 @@ function Controls:render()
 
 	local lg = _G.liquid_glass or { intensity = 1.0, show_frost = true }
 	local ass = assdraw.ass_new()
+	self._lg_play_hover = self._lg_play_hover or 0
 
 	-- Suppress all stock uosc surfaces so only our three pebbles render.
 	-- Setting `enabled = false` per frame is not enough — several elements
@@ -513,9 +514,25 @@ function Controls:render()
 	local play_hitbox     = {ax = play_x,     ay = row_y, bx = play_x + play_w,     by = row_y + pebble_h}
 	local progress_hitbox = {ax = progress_x, ay = row_y, bx = progress_x + progress_w, by = row_y + pebble_h}
 
-	-- 1. Play / pause pebble + icon (icon scaled up via \fscx/\fscy on the
-	-- 24x24 vector path — ~140% of source = ~33px effective).
-	draw_glass(pebble_geom(play_x, play_w))
+	-- 1. Play / pause pebble + icon with spring hover-scale.
+	local is_play_hover = get_point_to_rectangle_proximity(cursor, play_hitbox) == 0
+	local hover_target = is_play_hover and 1 or 0
+	if math.abs(self._lg_play_hover - hover_target) > 0.01 then
+		self._lg_play_hover = self._lg_play_hover + (hover_target - self._lg_play_hover) * 0.25
+		request_render()
+	end
+	local motion = (lg.motion) or nil
+	local hover_t = motion and motion.spring_out(self._lg_play_hover) or self._lg_play_hover
+	local hover_scale = 1 + 0.04 * hover_t
+	local scaled_w = play_w * hover_scale
+	local scaled_h = pebble_h * hover_scale
+	local scaled_x = play_x - (scaled_w - play_w) / 2
+	local scaled_y = row_y - (scaled_h - pebble_h) / 2
+	draw_glass({
+		x = scaled_x, y = scaled_y, w = scaled_w, h = scaled_h, r = scaled_h / 2,
+		intensity = lg.intensity * (1 + 0.15 * hover_t),
+		show_frost = lg.show_frost,
+	})
 
 	local icon_name = state.pause and 'play' or 'pause'
 	local icon_path = liquid_icons_lib.get(icon_name)
