@@ -14,11 +14,11 @@ local PLAY = 'm 7 6.5 l 7 17.5 b 7 19 7 19 8.3 18.25 l 17.7 12.75 b 19 12 19 12 
 
 local PAUSE = 'm 7 5.5 b 7 4 10 4 10 5.5 l 10 18.5 b 10 20 7 20 7 18.5 l 7 5.5 m 14 5.5 b 14 4 17 4 17 5.5 l 17 18.5 b 17 20 14 20 14 18.5 l 14 5.5'
 
--- Skip backward: double left chevron (clearly different from play triangle).
-local PREV = 'm 11 12 l 19 6 l 19 18 l 11 12 m 5 12 l 13 6 l 13 18 l 5 12'
+-- Skip backward: |◀ style (bar + filled triangle).
+local PREV = 'm 4 5 l 7 5 l 7 19 l 4 19 l 4 5 m 20 5 l 20 19 l 8 12 l 20 5'
 
--- Skip forward: double right chevron.
-local NEXT_ = 'm 13 12 l 5 6 l 5 18 l 13 12 m 19 12 l 11 6 l 11 18 l 19 12'
+-- Skip forward: ▶| style (filled triangle + bar).
+local NEXT_ = 'm 4 5 l 16 12 l 4 19 l 4 5 m 17 5 l 20 5 l 20 19 l 17 19 l 17 5'
 
 -- ===== M2 icons =====
 
@@ -56,16 +56,17 @@ local PIP =
   'm 3 5 l 21 5 b 22 5 22 5 22 6 l 22 18 b 22 19 22 19 21 19 l 3 19 b 2 19 2 19 2 18 l 2 6 b 2 5 2 5 3 5 ' ..
   'm 13 12 l 20 12 l 20 17 l 13 17 l 13 12'
 
--- Subtitle: speech bubble with "T" inside (like a text/caption icon).
+-- Subtitle: "CC" inside a rounded rectangle (standard closed-captions icon).
 local SUBTITLE =
-  'm 4 4 l 20 4 b 21 4 22 5 22 6 l 22 15 b 22 16 21 17 20 17 l 13 17 l 9 21 l 9 17 l 4 17 b 3 17 2 16 2 15 l 2 6 b 2 5 3 4 4 4 ' ..
-  'm 8 8 l 16 8 l 16 10 l 13 10 l 13 15 l 11 15 l 11 10 l 8 10 l 8 8'
+  'm 3 5 l 21 5 b 22 5 23 6 23 7 l 23 17 b 23 18 22 19 21 19 l 3 19 b 2 19 1 18 1 17 l 1 7 b 1 6 2 5 3 5 ' ..
+  'm 7 9 b 5 9 5 15 7 15 l 9 15 l 9 13 l 8 13 b 7 13 7 11 8 11 l 9 11 l 9 9 l 7 9 ' ..
+  'm 15 9 b 13 9 13 15 15 15 l 17 15 l 17 13 l 16 13 b 15 13 15 11 16 11 l 17 11 l 17 9 l 15 9'
 
--- Headphones icon (recognizable audio selection symbol).
+-- Audio track: double music note ♫ (bold, recognizable).
 local AUDIO_TRACK =
-  'm 4 13 b 4 7 8 3 12 3 b 16 3 20 7 20 13 ' ..
-  'l 20 18 b 20 20 18 20 18 20 l 17 20 b 16 20 16 19 16 18 l 16 13 l 20 13 ' ..
-  'm 4 13 l 8 13 l 8 18 b 8 19 8 20 7 20 l 6 20 b 4 20 4 20 4 18 l 4 13'
+  'm 7 4 l 19 2 l 19 3 l 9 5 l 9 15 ' ..
+  'b 9 18 5 18 5 15 b 5 12 9 12 9 15 l 9 5 ' ..
+  'm 19 3 l 19 13 b 19 16 15 16 15 13 b 15 10 19 10 19 13'
 
 local CHAPTER_LIST =
   'm 4 6 l 6 6 m 9 6 l 20 6 ' ..
@@ -104,6 +105,12 @@ local SEARCH =
 
 local EXPAND_MENU = 'm 5 9 l 12 16 l 19 9'
 
+-- Speed: gauge/speedometer (arc with needle).
+local SPEED =
+  'm 3 17 b 3 9 8 4 14 4 b 20 4 24 9 24 17 ' ..
+  'l 21 17 b 21 11 18 7 14 7 b 10 7 6 11 6 17 l 3 17 ' ..
+  'm 13 10 l 15 15 l 13 16 l 11 11 l 13 10'
+
 local registry = {
   play   = PLAY,
   pause  = PAUSE,
@@ -129,6 +136,7 @@ local registry = {
   eject             = EJECT,
   search            = SEARCH,
   expand_menu       = EXPAND_MENU,
+  speed             = SPEED,
 }
 
 function M.get(name) return registry[name] end

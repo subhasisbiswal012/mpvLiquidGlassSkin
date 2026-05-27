@@ -22,7 +22,7 @@ describe('icons', function()
     'volume_up', 'volume_down', 'volume_mute', 'volume_off',
     'fullscreen_enter', 'fullscreen_exit', 'pip',
     'subtitle', 'audio_track', 'chapter_list', 'playlist',
-    'settings', 'close', 'minimize', 'crop_square', 'eject', 'search',
+    'settings', 'close', 'minimize', 'crop_square', 'eject', 'search', 'speed',
     'expand_menu',
   }
 
