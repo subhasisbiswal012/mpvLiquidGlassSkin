@@ -491,7 +491,7 @@ function Controls:render()
 		draw_glass({
 			x = bx, y = by, w = bw, h = bh, r = br,
 			intensity = lg.intensity * (is_hovered and 1.2 or 1.0),
-			show_frost = lg.show_frost,
+			show_frost = lg.show_frost, shadow_blur = 20,
 		})
 		local icon_path = liquid_icons_lib.get(icon_name)
 		if icon_path then
@@ -512,7 +512,7 @@ function Controls:render()
 		draw_glass({
 			x = bx, y = by, w = bw, h = bh, r = bh / 2,
 			intensity = lg.intensity * (is_hovered and 1.2 or 1.0),
-			show_frost = lg.show_frost,
+			show_frost = lg.show_frost, shadow_blur = 20,
 		})
 		ass:new_event()
 		ass:append(string.format(
@@ -523,17 +523,17 @@ function Controls:render()
 	end
 
 	-- ==================== LAYOUT ====================
-	local pad_x = 8
+	local pad_x = 10
 	local area_ax = self.ax + pad_x
 	local area_bx = self.bx - pad_x
 	local area_w  = area_bx - area_ax
 
-	local btn_h = 34
-	local btn_w = 34
-	local btn_gap = 4
-	local block_gap = 8
-	local progress_h = 10
-	local row_gap = 4
+	local btn_h = 42
+	local btn_w = 42
+	local btn_gap = 6
+	local block_gap = 10
+	local progress_h = 16
+	local row_gap = 10
 
 	-- Responsive: detect if too narrow for single row (vertical/portrait video).
 	local is_narrow = area_w < 500
@@ -548,17 +548,18 @@ function Controls:render()
 		progress_y = btn_row_y - row_gap - progress_h
 	end
 
-	-- ==================== 1. PROGRESS BAR (full width) ====================
+	-- ==================== 1. PROGRESS BAR (full width, bigger + smoother) ====================
 	draw_glass({
 		x = area_ax, y = progress_y, w = area_w, h = progress_h, r = progress_h / 2,
-		intensity = lg.intensity, show_frost = lg.show_frost,
+		intensity = lg.intensity * 1.1, show_frost = lg.show_frost,
+		shadow_blur = 24,
 	})
 
 	local progress = (state.duration and state.duration > 0)
 		and ((state.time or 0) / state.duration) or 0
 	if progress < 0 then progress = 0 elseif progress > 1 then progress = 1 end
 
-	local trk_inset = 2
+	local trk_inset = 4
 	local trk_h = progress_h - trk_inset * 2
 	local trk_ax = area_ax + trk_inset
 	local trk_bx = area_bx - trk_inset
@@ -602,12 +603,12 @@ function Controls:render()
 	local sh = btn_h * play_scale
 	draw_glass({
 		x = cx - (sw - btn_w) / 2, y = btn_row_y - (sh - btn_h) / 2, w = sw, h = sh, r = sh / 2,
-		intensity = lg.intensity * (1 + 0.2 * hover_t), show_frost = lg.show_frost,
+		intensity = lg.intensity * (1 + 0.2 * hover_t), show_frost = lg.show_frost, shadow_blur = 20,
 	})
 	local play_icon = state.pause and 'play' or 'pause'
 	local play_icon_path = liquid_icons_lib.get(play_icon)
 	if play_icon_path then
-		local pscale = (btn_h * 0.55) / 24
+		local pscale = (btn_h * 0.60) / 24
 		ass:new_event()
 		ass:append(string.format(
 			'{\\an7\\pos(%d,%d)\\bord0\\shad0\\1c&H%s&\\1a&H0F&\\fscx%d\\fscy%d\\p1}%s{\\p0}',
@@ -618,16 +619,16 @@ function Controls:render()
 	cx = cx + btn_w + block_gap
 
 	-- Prev + Next in one block.
-	local pn_btn = btn_w + 4
+	local pn_btn = btn_w + 6
 	local pn_block_w = pn_btn * 2 + 2
-	draw_glass({ x = cx, y = btn_row_y, w = pn_block_w, h = btn_h, r = btn_h / 2, intensity = lg.intensity, show_frost = lg.show_frost })
+	draw_glass({ x = cx, y = btn_row_y, w = pn_block_w, h = btn_h, r = btn_h / 2, intensity = lg.intensity, show_frost = lg.show_frost, shadow_blur = 20 })
 	local prev_rect = {ax = cx, ay = btn_row_y, bx = cx + pn_btn, by = btn_row_y + btn_h}
 	local next_cx = cx + pn_btn + 2
 	local next_rect = {ax = next_cx, ay = btn_row_y, bx = next_cx + pn_btn, by = btn_row_y + btn_h}
 	for _, idef in ipairs({{cx, pn_btn, 'prev'}, {next_cx, pn_btn, 'next'}}) do
 		local icon_path = liquid_icons_lib.get(idef[3])
 		if icon_path then
-			local s = (btn_h * 0.50) / 24
+			local s = (btn_h * 0.58) / 24
 			ass:new_event()
 			ass:append(string.format(
 				'{\\an7\\pos(%d,%d)\\bord0\\shad0\\1c&H%s&\\1a&H10&\\fscx%d\\fscy%d\\p1}%s{\\p0}',
@@ -650,22 +651,22 @@ function Controls:render()
 		_lg_format_time(state.duration or 0))
 	local pct = math.floor(progress * 100)
 	local time_pct_str = string.format('%s  %d%%%%', time_str, pct)
-	local time_block_w = is_narrow and math.max(110, #time_str * 9 + 30) or math.max(160, #time_pct_str * 9 + 16)
-	draw_glass({ x = cx, y = btn_row_y, w = time_block_w, h = btn_h, r = btn_h / 2, intensity = lg.intensity * 0.9, show_frost = lg.show_frost })
+	local time_block_w = is_narrow and math.max(130, #time_str * 11 + 30) or math.max(200, #time_pct_str * 11 + 20)
+	draw_glass({ x = cx, y = btn_row_y, w = time_block_w, h = btn_h, r = btn_h / 2, intensity = lg.intensity * 0.9, show_frost = lg.show_frost, shadow_blur = 20 })
 	ass:new_event()
 	ass:append(string.format(
 		'{\\an5\\pos(%d,%d)\\fnGeist Mono\\fs%d\\bord0\\shad0\\1c&H%s&}%s',
 		cx + time_block_w / 2, btn_row_y + btn_h / 2,
-		is_narrow and 13 or 15, ink_bgr, time_pct_str
+		is_narrow and 16 or 18, ink_bgr, time_pct_str
 	))
 	cx = cx + time_block_w + block_gap
 
 	-- Volume icon + slider + percentage.
-	local vol_slider_w = is_narrow and 70 or 100
-	local vol_pct_w = 36
-	local vol_block_w = btn_w + 4 + vol_slider_w + vol_pct_w
+	local vol_slider_w = is_narrow and 80 or 110
+	local vol_pct_w = 44
+	local vol_block_w = btn_w + 6 + vol_slider_w + vol_pct_w
 	local vol_block_x = cx
-	draw_glass({ x = cx, y = btn_row_y, w = vol_block_w, h = btn_h, r = btn_h / 2, intensity = lg.intensity * 0.9, show_frost = lg.show_frost })
+	draw_glass({ x = cx, y = btn_row_y, w = vol_block_w, h = btn_h, r = btn_h / 2, intensity = lg.intensity * 0.9, show_frost = lg.show_frost, shadow_blur = 20 })
 	local vol_icon_rect = {ax = cx, ay = btn_row_y, bx = cx + btn_w, by = btn_row_y + btn_h}
 	local vol_icon = 'volume_up'
 	if state.mute then vol_icon = 'volume_off'
@@ -674,7 +675,7 @@ function Controls:render()
 	end
 	local vi_path = liquid_icons_lib.get(vol_icon)
 	if vi_path then
-		local vs = (btn_h * 0.45) / 24
+		local vs = (btn_h * 0.55) / 24
 		ass:new_event()
 		ass:append(string.format(
 			'{\\an7\\pos(%d,%d)\\bord0\\shad0\\1c&H%s&\\1a&H10&\\fscx%d\\fscy%d\\p1}%s{\\p0}',
@@ -682,9 +683,9 @@ function Controls:render()
 			ink_bgr, vs * 100, vs * 100, vi_path
 		))
 	end
-	local vs_ax = cx + btn_w + 4
-	local vs_bx = cx + btn_w + 4 + vol_slider_w
-	local vs_h = 6
+	local vs_ax = cx + btn_w + 6
+	local vs_bx = cx + btn_w + 6 + vol_slider_w
+	local vs_h = 8
 	local vs_y = btn_row_y + (btn_h - vs_h) / 2
 	emit_pill(vs_ax, vs_y, vs_bx, vs_h, 'FFFFFF', '&H80&')
 	local vol_frac = math.min((state.volume or 0) / (state.volume_max or 100), 1)
@@ -698,7 +699,7 @@ function Controls:render()
 	local vol_pct = math.floor((state.volume or 0) + 0.5)
 	ass:new_event()
 	ass:append(string.format(
-		'{\\an6\\pos(%d,%d)\\fnGeist Mono\\fs14\\bord0\\shad0\\1c&H%s&}%d%%%%',
+		'{\\an6\\pos(%d,%d)\\fnGeist Mono\\fs16\\b1\\bord0\\shad0\\1c&H%s&}%d%%%%',
 		cx + vol_block_w - 6, btn_row_y + btn_h / 2, ink_bgr, vol_pct
 	))
 	local vol_slider_rect = {ax = vs_ax, ay = btn_row_y, bx = vs_bx, by = btn_row_y + btn_h}
@@ -708,42 +709,60 @@ function Controls:render()
 	-- Right-side buttons. On narrow screens, use row 2.
 	local rrow_y = is_narrow and (self.by - btn_h - 2) or btn_row_y
 	local rx = area_bx
-	local rbtn = btn_w + 4
+	local rbtn = btn_w + 6
 
-	-- Fullscreen (bold corners icon, bigger)
+	-- Fullscreen
 	rx = rx - rbtn
 	local fs_rect = {ax = rx, ay = rrow_y, bx = rx + rbtn, by = rrow_y + btn_h}
 	local fs_hover = get_point_to_rectangle_proximity(cursor, fs_rect) == 0
-	draw_button(rx, rrow_y, rbtn, btn_h, state.fullscreen and 'fullscreen_exit' or 'fullscreen_enter', fs_hover, 0.70)
+	draw_button(rx, rrow_y, rbtn, btn_h, state.fullscreen and 'fullscreen_exit' or 'fullscreen_enter', fs_hover, 0.75)
 	rx = rx - btn_gap
 
-	-- Settings (equalizer icon, bigger)
+	-- Settings
 	rx = rx - rbtn
 	local settings_rect = {ax = rx, ay = rrow_y, bx = rx + rbtn, by = rrow_y + btn_h}
 	local settings_hover = get_point_to_rectangle_proximity(cursor, settings_rect) == 0
-	draw_button(rx, rrow_y, rbtn, btn_h, 'settings', settings_hover, 0.70)
+	draw_button(rx, rrow_y, rbtn, btn_h, 'settings', settings_hover, 0.75)
 	rx = rx - btn_gap
 
-	-- Subtitle: text "CC" button (clear and bold)
-	local cc_w = rbtn + 8
+	-- Subtitle: bold "CC" text
+	local cc_w = rbtn + 12
 	rx = rx - cc_w
 	local sub_rect = {ax = rx, ay = rrow_y, bx = rx + cc_w, by = rrow_y + btn_h}
 	local sub_hover = get_point_to_rectangle_proximity(cursor, sub_rect) == 0
-	draw_text_button(rx, rrow_y, cc_w, btn_h, 'CC', sub_hover, 16)
+	draw_text_button(rx, rrow_y, cc_w, btn_h, 'CC', sub_hover, 20)
 	rx = rx - btn_gap
 
-	-- Audio (♫ note, bigger icon)
-	rx = rx - rbtn
-	local audio_rect = {ax = rx, ay = rrow_y, bx = rx + rbtn, by = rrow_y + btn_h}
+	-- Audio: Material Icon headphones (since we have the font now)
+	local audio_w = rbtn + 4
+	rx = rx - audio_w
+	local audio_rect = {ax = rx, ay = rrow_y, bx = rx + audio_w, by = rrow_y + btn_h}
 	local audio_hover = get_point_to_rectangle_proximity(cursor, audio_rect) == 0
-	draw_button(rx, rrow_y, rbtn, btn_h, 'audio_track', audio_hover, 0.75)
+	draw_glass({
+		x = rx, y = rrow_y, w = audio_w, h = btn_h, r = btn_h / 2,
+		intensity = lg.intensity * (audio_hover and 1.2 or 1.0), show_frost = lg.show_frost, shadow_blur = 20,
+	})
+	ass:new_event()
+	ass:append(string.format(
+		'{\\an5\\pos(%d,%d)\\fnMaterialIconsRound-Regular\\fs%d\\bord0\\shad0\\1c&H%s&}headphones',
+		rx + audio_w / 2, rrow_y + btn_h / 2, 22, ink_bgr
+	))
 	rx = rx - btn_gap
 
-	-- Playlist (list icon, bigger)
-	rx = rx - rbtn
-	local playlist_rect = {ax = rx, ay = rrow_y, bx = rx + rbtn, by = rrow_y + btn_h}
+	-- Playlist: Material Icon playlist_play
+	local pl_w = rbtn + 4
+	rx = rx - pl_w
+	local playlist_rect = {ax = rx, ay = rrow_y, bx = rx + pl_w, by = rrow_y + btn_h}
 	local playlist_hover = get_point_to_rectangle_proximity(cursor, playlist_rect) == 0
-	draw_button(rx, rrow_y, rbtn, btn_h, 'playlist', playlist_hover, 0.70)
+	draw_glass({
+		x = rx, y = rrow_y, w = pl_w, h = btn_h, r = btn_h / 2,
+		intensity = lg.intensity * (playlist_hover and 1.2 or 1.0), show_frost = lg.show_frost, shadow_blur = 20,
+	})
+	ass:new_event()
+	ass:append(string.format(
+		'{\\an5\\pos(%d,%d)\\fnMaterialIconsRound-Regular\\fs%d\\bord0\\shad0\\1c&H%s&}playlist_play',
+		rx + pl_w / 2, rrow_y + btn_h / 2, 24, ink_bgr
+	))
 
 	-- ==================== 3. INTERACTIVITY ====================
 	if cursor and cursor.zone then
