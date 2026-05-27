@@ -65,4 +65,29 @@ describe('motion easings', function()
       motion.reduced = false
     end)
   end)
+
+  describe('apply_reduced(value)', function()
+    it('accepts truthy values', function()
+      package.loaded['lib/liquid/motion'] = nil
+      local motion = require('lib/liquid/motion')
+      motion.apply_reduced('yes')
+      assert.is_true(motion.reduced)
+      motion.apply_reduced(true)
+      assert.is_true(motion.reduced)
+      motion.apply_reduced(1)
+      assert.is_true(motion.reduced)
+    end)
+
+    it('accepts falsy values', function()
+      package.loaded['lib/liquid/motion'] = nil
+      local motion = require('lib/liquid/motion')
+      motion.reduced = true
+      motion.apply_reduced('no')
+      assert.is_false(motion.reduced)
+      motion.apply_reduced(false)
+      assert.is_false(motion.reduced)
+      motion.apply_reduced(nil)
+      assert.is_false(motion.reduced)
+    end)
+  end)
 end)
