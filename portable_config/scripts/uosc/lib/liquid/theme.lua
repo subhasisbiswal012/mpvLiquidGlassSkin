@@ -2,14 +2,18 @@
 
 local M = {}
 
+-- Token values per design spec §6 (six-layer glass primitive).
+-- Body is white at low alpha in BOTH themes — the "dark" / "light" feel
+-- comes from highlight/rim contrast and the ink (text) color, not from a
+-- dark body fill. A dark body fill reads as an opaque plate, not glass.
 M.dark = {
-  body_alpha       = 0.40,
-  body_color       = '0A0A0C',
+  body_alpha       = 0.08,
+  body_color       = 'FFFFFF',
   frost_alpha      = 0.06,
-  top_highlight    = 0.45,
-  rim_light        = 0.75,
-  border           = 0.35,
-  shadow_alpha     = 0.55,
+  top_highlight    = 0.18,
+  rim_light        = 0.45,
+  border           = 0.10,
+  shadow_alpha     = 0.30,
   ink              = 'FFFFFF',
   ink_alpha        = 0.95,
   ink_dim          = 0.55,
@@ -19,13 +23,13 @@ M.dark = {
 }
 
 M.light = {
-  body_alpha       = 0.65,
-  body_color       = 'F4F1EA',
+  body_alpha       = 0.18,
+  body_color       = 'FFFFFF',
   frost_alpha      = 0.08,
-  top_highlight    = 0.55,
-  rim_light        = 0.80,
-  border           = 0.40,
-  shadow_alpha     = 0.20,
+  top_highlight    = 0.28,
+  rim_light        = 0.60,
+  border           = 0.12,
+  shadow_alpha     = 0.32,
   ink              = '0A0A0C',
   ink_alpha        = 0.95,
   ink_dim          = 0.55,

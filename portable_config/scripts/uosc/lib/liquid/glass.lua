@@ -53,6 +53,14 @@ local function color_tag(rrggbb)
   return string.format('\\1c&H%s&', bgr(rrggbb))
 end
 
+-- Border-color tag for \bord-stroked layers. libass strokes pick up \3c
+-- (outline color), not \1c (fill color) — setting only \1c on a stroke
+-- layer leaves the outline at the style default, which is opaque black
+-- and shows up as a hard dark frame on bright video.
+local function border_color_tag(rrggbb)
+  return string.format('\\3c&H%s&', bgr(rrggbb))
+end
+
 -- Single ASS event line. uosc renders by concatenating these.
 local function event(tags, drawing)
   return string.format('{\\an7\\pos(0,0)\\bord0\\shad0%s}%s\n', tags, drawing)
@@ -72,14 +80,22 @@ function M.draw(opts)
   local t = theme.current
   local out = {}
 
-  -- Layer 1: drop shadow
+  -- Layer 1: drop shadow.
+  -- libass note: \blur only softens the border (\bord) — on a \bord0 filled
+  -- drawing it does nothing, leaving a hard dark rectangle. \be (box blur,
+  -- iterations) softens the full rendered fill, so use that instead.
+  -- Map shadow_blur (px-ish) to \be iterations with a soft cap.
+  local be_iters = math.max(1, math.min(10, math.floor(shadow_blur / 3)))
   local shadow_path = rounded_rect_path(x, y + shadow_offset_y, w, h, r)
   table.insert(out, event(
-    string.format('%s\\1a%s\\blur%d\\p1', color_tag('000000'), alpha_byte(theme.alpha('shadow_alpha', intensity)), shadow_blur),
+    string.format('%s\\1a%s\\be%d\\p1', color_tag('000000'), alpha_byte(theme.alpha('shadow_alpha', intensity)), be_iters),
     shadow_path .. '{\\p0}'
   ))
 
-  -- Layer 2: glass body
+  -- Layer 2: glass body. No \be here — even a 1-iter box blur spreads the
+  -- (white) body alpha ~1px in every direction, which shows up as a faint
+  -- white halo above and around the pebble's top edge. libass's default
+  -- AA on the bezier corners is sufficient.
   local body_path = rounded_rect_path(x, y, w, h, r)
   table.insert(out, event(
     string.format('%s\\1a%s\\p1', color_tag(t.body_color), alpha_byte(theme.alpha('body_alpha', intensity))),
@@ -91,24 +107,45 @@ function M.draw(opts)
   -- We still read the flag to keep its behavior tested.
   local _ = show_frost
 
-  -- Layer 4: top highlight
-  local hl_h = math.floor(h * 0.35)
-  local hl_path = rounded_rect_path(x + 1, y + 1, w - 2, hl_h, math.max(0, r - 1))
+  -- Layer 4: top highlight — clipped to the body so it never escapes the
+  -- pebble shape, and uses the body's own rounded corners so the top arc
+  -- aligns perfectly. The wash drops off well before the bottom of the
+  -- pebble (height = 45% of pebble) so it reads as a soft top gradient,
+  -- not a separate floating pill.
+  local hl_h = math.floor(h * 0.45)
+  local hl_path = rounded_rect_path(x, y, w, hl_h, r)
   table.insert(out, event(
-    string.format('%s\\1a%s\\p1', color_tag('FFFFFF'), alpha_byte(theme.alpha('top_highlight', intensity))),
+    string.format('\\clip(%s)%s\\1a%s\\p1',
+      body_path,
+      color_tag('FFFFFF'),
+      alpha_byte(theme.alpha('top_highlight', intensity))),
     hl_path .. '{\\p0}'
   ))
 
-  -- Layer 5: rim light (top edge stroke)
+  -- Inset path for stroked layers: libass renders \bord centered on the
+  -- path (0.5px inside, 0.5px outside). Using the body path verbatim made
+  -- the stroke poke 0.5px ABOVE the body's top edge, which read as a
+  -- faint white sliver floating above each pebble — most visible at the
+  -- rounded corners where the curve presents more stroke pixels into the
+  -- overflow zone. Insetting by 0.5px keeps the entire \bord1 spread
+  -- inside the nominal body bounds.
+  local stroke_path = rounded_rect_path(x + 0.5, y + 0.5, w - 1, h - 1, math.max(0, r - 0.5))
+
+  -- Layer 5: rim light — top edge ONLY. Render the inset path's \bord1
+  -- outline, rect-clipped to a 2px-tall band at the top so only the top
+  -- arc shows. \3c (border color); fill masked via \1a&HFF&.
   table.insert(out, event(
-    string.format('\\bord1%s\\3a%s\\1a&HFF&\\p1', color_tag('FFFFFF'), alpha_byte(theme.alpha('rim_light', intensity))),
-    rounded_rect_path(x, y, w, math.min(h, 4), math.min(r, 2)) .. '{\\p0}'
+    string.format('\\clip(%d,%d,%d,%d)\\bord1%s\\3a%s\\1a&HFF&\\p1',
+      x, y, x + w, y + 2,
+      border_color_tag('FFFFFF'),
+      alpha_byte(theme.alpha('rim_light', intensity))),
+    stroke_path .. '{\\p0}'
   ))
 
-  -- Layer 6: full border
+  -- Layer 6: full border on the inset path so the stroke stays inside.
   table.insert(out, event(
-    string.format('\\bord1%s\\3a%s\\1a&HFF&\\p1', color_tag('FFFFFF'), alpha_byte(theme.alpha('border', intensity))),
-    body_path .. '{\\p0}'
+    string.format('\\bord1%s\\3a%s\\1a&HFF&\\p1', border_color_tag('FFFFFF'), alpha_byte(theme.alpha('border', intensity))),
+    stroke_path .. '{\\p0}'
   ))
 
   return table.concat(out)
