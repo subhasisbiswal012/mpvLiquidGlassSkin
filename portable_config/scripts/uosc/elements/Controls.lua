@@ -413,6 +413,8 @@ function Controls:render()
 	local lg = _G.liquid_glass or { intensity = 1.0, show_frost = true }
 	local ass = assdraw.ass_new()
 	self._lg_play_hover = self._lg_play_hover or 0
+	self._lg_vol_osd_until = self._lg_vol_osd_until or 0
+	self._lg_seek_osd_until = self._lg_seek_osd_until or 0
 
 	-- Suppress all stock uosc surfaces — we draw everything here.
 	if Elements then
@@ -643,7 +645,16 @@ function Controls:render()
 	local speed_rect = {ax = cx, ay = btn_row_y, bx = cx + btn_w, by = btn_row_y + btn_h}
 	local speed_hover = get_point_to_rectangle_proximity(cursor, speed_rect) == 0
 	draw_button(cx, btn_row_y, btn_w, btn_h, 'speed', speed_hover)
-	cx = cx + btn_w + block_gap
+	cx = cx + btn_w + btn_gap
+
+	-- Quality button: shows current resolution + opens quality picker.
+	local vid_h = mp.get_property_number('video-params/h', 0)
+	local quality_label = vid_h > 0 and tostring(vid_h) .. 'p' or 'HD'
+	local quality_w = math.max(btn_w + 16, #quality_label * 10 + 20)
+	local quality_rect = {ax = cx, ay = btn_row_y, bx = cx + quality_w, by = btn_row_y + btn_h}
+	local quality_hover = get_point_to_rectangle_proximity(cursor, quality_rect) == 0
+	draw_text_button(cx, btn_row_y, quality_w, btn_h, quality_label, quality_hover, 15)
+	cx = cx + quality_w + block_gap
 
 	-- Time + percentage in one block.
 	local time_str = string.format('%s / %s',
@@ -747,7 +758,7 @@ function Controls:render()
 	ass:new_event()
 	ass:append(string.format(
 		'{\\an5\\pos(%d,%d)\\fnMaterialIconsRound-Regular\\fs%d\\bord0\\shad0\\1c&H%s&}headphones',
-		rx + audio_w / 2, rrow_y + btn_h / 2, 22, ink_bgr
+		math.floor(rx + audio_w / 2), math.floor(rrow_y + btn_h / 2 + 1), 24, ink_bgr
 	))
 	rx = rx - btn_gap
 
@@ -763,7 +774,7 @@ function Controls:render()
 	ass:new_event()
 	ass:append(string.format(
 		'{\\an5\\pos(%d,%d)\\fnMaterialIconsRound-Regular\\fs%d\\bord0\\shad0\\1c&H%s&}playlist_play',
-		math.floor(rx + pl_w / 2), math.floor(rrow_y + btn_h / 2), 26, ink_bgr
+		math.floor(rx + pl_w / 2), math.floor(rrow_y + btn_h / 2 + 1), 26, ink_bgr
 	))
 
 	-- ==================== 3. INTERACTIVITY ====================
@@ -783,6 +794,9 @@ function Controls:render()
 				type = 'lg_speed', title = 'Speed', items = items
 			}))
 		end)
+		cursor:zone('primary_down', quality_rect, function()
+			mp.command('script-binding uosc/stream-quality')
+		end)
 		cursor:zone('primary_down', vol_icon_rect, function() mp.commandv('cycle', 'mute') end)
 		cursor:zone('primary_down', vol_slider_rect, function()
 			local frac = (cursor.x - vs_ax) / vol_fill_w
@@ -790,15 +804,23 @@ function Controls:render()
 			mp.commandv('set', 'volume', math.floor(frac * (state.volume_max or 100)))
 		end)
 
-		-- Scroll: volume block = volume, progress bar = seek.
-		cursor:zone('wheel_up', vol_block_rect, function()
-			mp.commandv('set', 'volume', math.min((state.volume or 0) + 5, state.volume_max or 100))
-		end)
-		cursor:zone('wheel_down', vol_block_rect, function()
-			mp.commandv('set', 'volume', math.max((state.volume or 0) - 5, 0))
-		end)
-		cursor:zone('wheel_up', progress_hitbox, function() mp.commandv('seek', 5, 'relative+exact') end)
-		cursor:zone('wheel_down', progress_hitbox, function() mp.commandv('seek', -5, 'relative+exact') end)
+		-- Scroll: volume block = volume (with centered OSD), progress bar = seek (with centered OSD).
+		local function vol_scroll(delta)
+			local new_vol = math.max(0, math.min((state.volume or 0) + delta, state.volume_max or 100))
+			mp.commandv('no-osd', 'set', 'volume', new_vol)
+			self._lg_vol_osd_until = mp.get_time() + 2
+			request_render()
+		end
+		cursor:zone('wheel_up', vol_block_rect, function() vol_scroll(5) end)
+		cursor:zone('wheel_down', vol_block_rect, function() vol_scroll(-5) end)
+
+		local function seek_scroll(delta)
+			mp.commandv('no-osd', 'seek', delta, 'relative+exact')
+			self._lg_seek_osd_until = mp.get_time() + 2
+			request_render()
+		end
+		cursor:zone('wheel_up', progress_hitbox, function() seek_scroll(5) end)
+		cursor:zone('wheel_down', progress_hitbox, function() seek_scroll(-5) end)
 
 		-- Progress bar click-to-seek + drag scrub.
 		local seek_ax = trk_ax
@@ -827,6 +849,63 @@ function Controls:render()
 		cursor:zone('primary_down', sub_rect, function() mp.command('script-binding uosc/subtitles') end)
 		cursor:zone('primary_down', audio_rect, function() mp.command('script-binding uosc/audio') end)
 		cursor:zone('primary_down', playlist_rect, function() mp.command('script-binding uosc/items') end)
+	end
+
+	-- ==================== 4. CENTERED OSD OVERLAYS (macOS style) ====================
+	local now = mp.get_time()
+	local screen_cx = (self.ax + self.bx) / 2
+	local screen_cy = (self.ay + self.by) / 2 - 60
+
+	-- Volume OSD: big speaker icon + volume %
+	if now < self._lg_vol_osd_until then
+		local osd_w, osd_h = 160, 120
+		local osd_x = screen_cx - osd_w / 2
+		local osd_y = screen_cy - osd_h / 2
+		draw_glass({
+			x = osd_x, y = osd_y, w = osd_w, h = osd_h, r = 20,
+			intensity = lg.intensity * 1.5, show_frost = lg.show_frost, shadow_blur = 30,
+		})
+		-- Big speaker icon
+		ass:new_event()
+		ass:append(string.format(
+			'{\\an5\\pos(%d,%d)\\fnMaterialIconsRound-Regular\\fs52\\bord0\\shad0\\1c&H%s&}volume_up',
+			screen_cx, screen_cy - 14, ink_bgr
+		))
+		-- Volume percentage below
+		local vol_text = tostring(math.floor((state.volume or 0) + 0.5)) .. ' %'
+		ass:new_event()
+		ass:append(string.format(
+			'{\\an5\\pos(%d,%d)\\fnGeist\\fs22\\b1\\bord0\\shad0\\1c&H%s&}%s',
+			screen_cx, screen_cy + 34, ink_bgr, vol_text
+		))
+		-- Keep rendering until timeout
+		if now < self._lg_vol_osd_until - 0.05 then request_render() end
+	end
+
+	-- Seek OSD: video camera icon + progress %
+	if now < self._lg_seek_osd_until then
+		local osd_w, osd_h = 160, 120
+		local osd_x = screen_cx - osd_w / 2
+		local osd_y = screen_cy - osd_h / 2
+		draw_glass({
+			x = osd_x, y = osd_y, w = osd_w, h = osd_h, r = 20,
+			intensity = lg.intensity * 1.5, show_frost = lg.show_frost, shadow_blur = 30,
+		})
+		-- Big video camera icon
+		ass:new_event()
+		ass:append(string.format(
+			'{\\an5\\pos(%d,%d)\\fnMaterialIconsRound-Regular\\fs52\\bord0\\shad0\\1c&H%s&}videocam',
+			screen_cx, screen_cy - 14, ink_bgr
+		))
+		-- Progress percentage below
+		local seek_pct = (state.duration and state.duration > 0)
+			and math.floor(((state.time or 0) / state.duration) * 100) or 0
+		ass:new_event()
+		ass:append(string.format(
+			'{\\an5\\pos(%d,%d)\\fnGeist\\fs22\\b1\\bord0\\shad0\\1c&H%s&}%d %s',
+			screen_cx, screen_cy + 34, ink_bgr, seek_pct, '%'
+		))
+		if now < self._lg_seek_osd_until - 0.05 then request_render() end
 	end
 
 	return ass
