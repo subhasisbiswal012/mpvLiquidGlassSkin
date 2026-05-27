@@ -33,6 +33,14 @@ function TopBar:init()
 	self:update_dimensions()
 end
 
+function TopBar:get_visibility()
+    local raw = Element.get_visibility(self)
+    if raw <= 0 or raw >= 1 then return raw end
+    local motion = (_G.liquid_glass and _G.liquid_glass.motion) or nil
+    if not motion then return raw end
+    return motion.spring_settle(raw)
+end
+
 function TopBar:decide_enabled()
 	if options.top_bar == 'no-border' then
 		self.enabled = not state.border or state.title_bar == false or state.fullscreen
