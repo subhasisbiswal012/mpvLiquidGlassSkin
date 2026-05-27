@@ -427,8 +427,7 @@ function Controls:render()
 	-- per element instance.
 	if Elements then
 		local blocked = {
-			'timeline', 'top_bar', 'volume', 'speed',
-			'pause_indicator', 'buffering_indicator', 'curtain',
+			'speed', 'pause_indicator', 'buffering_indicator', 'curtain',
 		}
 		for _, key in ipairs(blocked) do
 			local el = Elements[key]
