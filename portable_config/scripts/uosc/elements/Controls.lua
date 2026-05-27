@@ -611,7 +611,7 @@ function Controls:render()
 
 	-- #1: Prev + Next grouped in one glass block (bigger buttons).
 	local pn_btn = btn_w + 8
-	local pn_block_w = pn_btn * 2 + 6
+	local pn_block_w = pn_btn * 2 + 2
 	draw_glass({
 		x = cx, y = btn_row_y, w = pn_block_w, h = btn_h, r = btn_h / 2,
 		intensity = lg.intensity, show_frost = lg.show_frost,
@@ -631,7 +631,7 @@ function Controls:render()
 		))
 	end
 	-- Next icon (right half)
-	local next_cx = cx + pn_btn + 6
+	local next_cx = cx + pn_btn + 2
 	local next_rect = {ax = next_cx, ay = btn_row_y, bx = next_cx + pn_btn, by = btn_row_y + btn_h}
 	local next_icon_path = liquid_icons_lib.get('next')
 	if next_icon_path then
@@ -741,8 +741,6 @@ function Controls:render()
 	local audio_hover = get_point_to_rectangle_proximity(cursor, audio_rect) == 0
 	draw_button(rx, btn_row_y, btn_w, btn_h, 'audio_track', audio_hover)
 
-	-- Full controls area hitbox (for scroll routing).
-	local controls_area = {ax = area_ax, ay = progress_y, bx = area_bx, by = btn_row_y + btn_h}
 	-- Volume block hitbox (for volume-only scroll).
 	local vol_block_rect = {ax = vol_block_x, ay = btn_row_y, bx = vol_block_x + vol_block_w, by = btn_row_y + btn_h}
 
@@ -769,7 +767,7 @@ function Controls:render()
 			mp.commandv('set', 'volume', math.floor(frac * (state.volume_max or 100)))
 		end)
 
-		-- #2: Scroll on volume block = volume control.
+		-- Scroll on volume block = volume control.
 		cursor:zone('wheel_up', vol_block_rect, function()
 			mp.commandv('set', 'volume', math.min((state.volume or 0) + 5, state.volume_max or 100))
 		end)
@@ -777,11 +775,11 @@ function Controls:render()
 			mp.commandv('set', 'volume', math.max((state.volume or 0) - 5, 0))
 		end)
 
-		-- #2: Scroll anywhere else on controls = seek forward/back 5s.
-		cursor:zone('wheel_up', controls_area, function()
+		-- Scroll on progress bar = seek forward/back 5s.
+		cursor:zone('wheel_up', progress_hitbox, function()
 			mp.commandv('seek', 5, 'relative+exact')
 		end)
-		cursor:zone('wheel_down', controls_area, function()
+		cursor:zone('wheel_down', progress_hitbox, function()
 			mp.commandv('seek', -5, 'relative+exact')
 		end)
 

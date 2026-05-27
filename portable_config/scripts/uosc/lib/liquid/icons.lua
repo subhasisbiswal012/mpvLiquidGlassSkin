@@ -61,10 +61,11 @@ local SUBTITLE =
   'm 4 4 l 20 4 b 21 4 22 5 22 6 l 22 15 b 22 16 21 17 20 17 l 13 17 l 9 21 l 9 17 l 4 17 b 3 17 2 16 2 15 l 2 6 b 2 5 3 4 4 4 ' ..
   'm 8 8 l 16 8 l 16 10 l 13 10 l 13 15 l 11 15 l 11 10 l 8 10 l 8 8'
 
+-- Headphones icon (recognizable audio selection symbol).
 local AUDIO_TRACK =
-  'm 10 6 l 18 5 l 18 16 ' ..
-  'm 18 15 b 18 18 13 18 13 15 b 13 12 18 12 18 15 ' ..
-  'm 10 17 b 10 20 5 20 5 17 b 5 14 10 14 10 17 l 10 6'
+  'm 4 13 b 4 7 8 3 12 3 b 16 3 20 7 20 13 ' ..
+  'l 20 18 b 20 20 18 20 18 20 l 17 20 b 16 20 16 19 16 18 l 16 13 l 20 13 ' ..
+  'm 4 13 l 8 13 l 8 18 b 8 19 8 20 7 20 l 6 20 b 4 20 4 20 4 18 l 4 13'
 
 local CHAPTER_LIST =
   'm 4 6 l 6 6 m 9 6 l 20 6 ' ..
