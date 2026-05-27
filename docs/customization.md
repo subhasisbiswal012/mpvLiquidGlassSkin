@@ -9,6 +9,7 @@ Edit `script-opts/liquid-glass.conf` for Liquid Glass options, or `script-opts/u
 | `intensity` | `0.5`–`1.5` | `1.0` | Multiplier on all alpha values |
 | `accent` | hex color | `E8553A` | Accent color (progress fill, selection) |
 | `show_frost_noise` | `yes`, `no` | `yes` | Toggle the noise texture layer |
+| `reduced_motion` | `yes`, `no` | `no` | Skip spring animations (instant transitions instead) |
 
 ## Power users
 Edit `scripts/uosc/lib/liquid/theme.lua` directly to change individual token values.

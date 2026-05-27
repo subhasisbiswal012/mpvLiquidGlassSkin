@@ -378,13 +378,9 @@ function Controls:on_prop_fullormaxed() self:update_dimensions() end
 function Controls:on_timeline_enabled() self:update_dimensions() end
 
 -- ===== Liquid Glass skin patch (Controls render) =====
--- Original uosc Controls had no :render() method — it only lays out child
--- Button/CycleButton elements (which render themselves). Here we add a
--- :render() that draws three glass pebbles (play, time, progress) instead,
--- and disable the original button children so they don't overlap our pebbles.
---
--- To restore stock uosc behavior: delete this entire block AND remove the
--- `enabled = false` loop in update_dimensions (or revert from upstream).
+-- YouTube-style layout: full-width progress bar on top, single row of
+-- glass buttons below. All stock elements (Timeline, Volume, etc.) are
+-- suppressed — everything draws here.
 
 local liquid_glass_lib  = require('lib/liquid/glass')
 local liquid_icons_lib  = require('lib/liquid/icons')
@@ -410,24 +406,20 @@ function Controls:render()
 	if visibility <= 0 then return end
 	if not self.enabled then return end
 
-	-- Disable stock child elements so only our pebbles render.
 	for _, control in ipairs(self.layout) do
 		if control.element then control.element.enabled = false end
 	end
 
 	local lg = _G.liquid_glass or { intensity = 1.0, show_frost = true }
 	local ass = assdraw.ass_new()
+	self._lg_play_hover = self._lg_play_hover or 0
+	self._lg_vol_osd_until = self._lg_vol_osd_until or 0
+	self._lg_seek_osd_until = self._lg_seek_osd_until or 0
 
-	-- Suppress all stock uosc surfaces so only our three pebbles render.
-	-- Setting `enabled = false` per frame is not enough — several elements
-	-- (Speed, Volume, Timeline) re-enable themselves on hover/drag, and
-	-- uosc renders them anyway when they're interacting. We additionally
-	-- monkey-patch :render() to return nil on first sight, which is
-	-- bulletproof. Idempotent: we set a sentinel so we only patch once
-	-- per element instance.
+	-- Suppress all stock uosc surfaces — we draw everything here.
 	if Elements then
 		local blocked = {
-			'timeline', 'top_bar', 'volume', 'speed',
+			'timeline', 'top_bar', 'volume', 'volume_slider', 'speed',
 			'pause_indicator', 'buffering_indicator', 'curtain',
 		}
 		for _, key in ipairs(blocked) do
@@ -440,9 +432,6 @@ function Controls:render()
 				end
 			end
 		end
-		-- Stock child Buttons live as control_1, control_2, ... — disable
-		-- their render too so the prev/next/shuffle/etc. text strip can't
-		-- bleed through behind our pebbles.
 		for _, control in ipairs(self.layout) do
 			local el = control.element
 			if el and not el._lg_render_suppressed then
@@ -455,115 +444,17 @@ function Controls:render()
 
 	local function draw_glass(geom)
 		for layer_text in liquid_glass_lib.draw(geom):gmatch('[^\n]+') do
-			if layer_text ~= '' then
+			if layer_text:sub(1, 2) ~= '--' and layer_text ~= '' then
 				ass:new_event()
 				ass:append(layer_text)
 			end
 		end
 	end
 
-	-- Pebble layout: three independent rounded rects.
-	-- Row stretches across the controls bounding box (which already has
-	-- uosc's controls_margin baked into self.ax/self.bx), with an extra
-	-- ~4% inset on each side for visual breathing. Time pebble grows
-	-- modestly with window width; play pebble stays icon-sized; progress
-	-- pebble consumes whatever is left.
-	local pebble_h = 68
-	local pebble_r = pebble_h / 2
-	local gap = 16
-	local play_w = 68
-
-	local box_w = self.bx - self.ax
-	local side_inset = math.floor(box_w * 0.04)
-	local row_x1 = self.ax + side_inset
-	local row_x2 = self.bx - side_inset
-	local row_w  = row_x2 - row_x1
-
-	-- Time pebble: scales gently with row, clamped to a readable range.
-	local times_w = math.max(210, math.min(320, math.floor(row_w * 0.20)))
-	local progress_w = row_w - play_w - times_w - 2 * gap
-	if progress_w < 140 then
-		-- Window is too narrow for the comfortable layout — shrink the
-		-- time pebble before the progress pebble vanishes.
-		times_w = math.max(160, times_w - (140 - progress_w))
-		progress_w = row_w - play_w - times_w - 2 * gap
-		if progress_w < 100 then progress_w = 100 end
-	end
-
-	-- Bottom-pin the row to self.by (uosc's bottom edge, above timeline)
-	-- with a small visual margin. Centering inside (self.ay..self.by) put
-	-- the row half above the bbox because pebble_h exceeds the bbox
-	-- height (controls_size ~32).
-	local row_y = self.by - pebble_h - 12
-
-	local play_x     = row_x1
-	local times_x    = play_x + play_w + gap
-	local progress_x = times_x + times_w + gap
-
-	local function pebble_geom(x, w)
-		return {
-			x = x, y = row_y, w = w, h = pebble_h, r = pebble_r,
-			intensity = lg.intensity, show_frost = lg.show_frost,
-		}
-	end
-
 	local ink_bgr = _lg_bgr(liquid_theme_lib.current.ink)
-	local pf_bgr  = _lg_bgr(liquid_theme_lib.current.progress_fill)
+	local accent_bgr = _lg_bgr(liquid_theme_lib.current.accent)
 
-	-- Hitboxes for cursor zones (interactivity below).
-	local play_hitbox     = {ax = play_x,     ay = row_y, bx = play_x + play_w,     by = row_y + pebble_h}
-	local progress_hitbox = {ax = progress_x, ay = row_y, bx = progress_x + progress_w, by = row_y + pebble_h}
-
-	-- 1. Play / pause pebble + icon (icon scaled up via \fscx/\fscy on the
-	-- 24x24 vector path — ~140% of source = ~33px effective).
-	draw_glass(pebble_geom(play_x, play_w))
-
-	local icon_name = state.pause and 'play' or 'pause'
-	local icon_path = liquid_icons_lib.get(icon_name)
-	if icon_path then
-		local icon_scale = 140  -- percent
-		local icon_render_w = 24 * icon_scale / 100
-		ass:new_event()
-		ass:append(string.format(
-			'{\\an7\\pos(%d,%d)\\fscx%d\\fscy%d\\bord0\\shad0\\1c&H%s&\\1a&H0F&\\p1}%s{\\p0}',
-			play_x + math.floor((play_w - icon_render_w) / 2),
-			row_y + math.floor((pebble_h - icon_render_w) / 2),
-			icon_scale, icon_scale,
-			ink_bgr,
-			icon_path
-		))
-	end
-
-	-- 2. Time readout pebble + text. Geist (sans) Medium for a premium
-	-- modern look; tnum is implicit via Geist's design but we explicitly
-	-- add a touch of letter-spacing via \fsp for breathing room.
-	draw_glass(pebble_geom(times_x, times_w))
-	local time_str = string.format('%s / %s',
-		_lg_format_time(state.time or 0),
-		_lg_format_time(state.duration or 0))
-	ass:new_event()
-	ass:append(string.format(
-		'{\\an5\\pos(%d,%d)\\fnGeist Medium\\fs26\\fsp1\\bord0\\shad0\\1c&H%s&}%s',
-		times_x + math.floor(times_w / 2),
-		row_y + math.floor(pebble_h / 2),
-		ink_bgr,
-		time_str
-	))
-
-	-- 3. Progress pebble + track. Track is a rounded pill (height 6) so it
-	-- reads as a real progress bar rather than a hairline. Track sits
-	-- centered vertically on the pebble.
-	draw_glass(pebble_geom(progress_x, progress_w))
-	local track_h = 6
-	local track_y = row_y + math.floor((pebble_h - track_h) / 2)
-	local track_inset = 28
-	local track_x1 = progress_x + track_inset
-	local track_x2 = progress_x + progress_w - track_inset
-	local track_w = track_x2 - track_x1
-	local progress = (state.duration and state.duration > 0)
-		and ((state.time or 0) / state.duration) or 0
-	if progress < 0 then progress = 0 elseif progress > 1 then progress = 1 end
-
+	-- Helper: draw a rounded pill (for progress bar tracks).
 	local function emit_pill(px1, py, px2, ph, color_hex, alpha_byte_str)
 		local pw = px2 - px1
 		if pw < ph then return end
@@ -574,14 +465,14 @@ function Controls:render()
 		ass:new_event()
 		ass:append(string.format(
 			'{\\an7\\pos(0,0)\\bord0\\shad0\\1c&H%s&\\1a%s\\p1}'
-			.. 'm %.2f %.2f l %.2f %.2f '
-			.. 'b %.2f %.2f %.2f %.2f %.2f %.2f '
-			.. 'l %.2f %.2f '
-			.. 'b %.2f %.2f %.2f %.2f %.2f %.2f '
-			.. 'l %.2f %.2f '
-			.. 'b %.2f %.2f %.2f %.2f %.2f %.2f '
-			.. 'l %.2f %.2f '
-			.. 'b %.2f %.2f %.2f %.2f %.2f %.2f'
+			.. 'm %.1f %.1f l %.1f %.1f '
+			.. 'b %.1f %.1f %.1f %.1f %.1f %.1f '
+			.. 'l %.1f %.1f '
+			.. 'b %.1f %.1f %.1f %.1f %.1f %.1f '
+			.. 'l %.1f %.1f '
+			.. 'b %.1f %.1f %.1f %.1f %.1f %.1f '
+			.. 'l %.1f %.1f '
+			.. 'b %.1f %.1f %.1f %.1f %.1f %.1f'
 			.. '{\\p0}',
 			color_hex, alpha_byte_str,
 			x1 + pr, y1,         x2 - pr, y1,
@@ -595,35 +486,367 @@ function Controls:render()
 		))
 	end
 
-	-- track background (translucent white pill)
-	emit_pill(track_x1, track_y, track_x2, track_h, 'FFFFFF', '&H80&')
-	-- progress fill (opaque accent/white)
-	local fill_x = track_x1 + math.floor(track_w * progress)
-	if fill_x > track_x1 + track_h then
-		emit_pill(track_x1, track_y, fill_x, track_h, pf_bgr, '&H10&')
+	-- Helper: draw a glass button pebble with an icon centered inside.
+	-- icon_scale_factor overrides the default 0.60 when larger icons are needed.
+	local function draw_button(bx, by, bw, bh, icon_name, is_hovered, icon_scale_factor)
+		local br = bh / 2
+		draw_glass({
+			x = bx, y = by, w = bw, h = bh, r = br,
+			intensity = lg.intensity * (is_hovered and 1.2 or 1.0),
+			show_frost = lg.show_frost, shadow_blur = 20,
+		})
+		local icon_path = liquid_icons_lib.get(icon_name)
+		if icon_path then
+			local scale = (bh * (icon_scale_factor or 0.60)) / 24
+			ass:new_event()
+			ass:append(string.format(
+				'{\\an7\\pos(%d,%d)\\bord0\\shad0\\1c&H%s&\\1a&H10&\\fscx%d\\fscy%d\\p1}%s{\\p0}',
+				bx + (bw - 24 * scale) / 2,
+				by + (bh - 24 * scale) / 2,
+				ink_bgr,
+				scale * 100, scale * 100,
+				icon_path
+			))
+		end
+	end
+	-- Helper: draw a glass button with text label instead of an icon.
+	local function draw_text_button(bx, by, bw, bh, label, is_hovered, font_size)
+		draw_glass({
+			x = bx, y = by, w = bw, h = bh, r = bh / 2,
+			intensity = lg.intensity * (is_hovered and 1.2 or 1.0),
+			show_frost = lg.show_frost, shadow_blur = 20,
+		})
+		ass:new_event()
+		ass:append(string.format(
+			'{\\an5\\pos(%d,%d)\\fnGeist\\fs%d\\b1\\bord0\\shad0\\1c&H%s&}%s',
+			bx + bw / 2, by + bh / 2,
+			font_size or 13, ink_bgr, label
+		))
 	end
 
-	-- ===== Interactivity (Milestone 2 was the original target, pulled
-	-- forward because the read-only chrome made the pebbles feel broken).
-	-- Zones are rebound every frame, per uosc's cursor.zone contract. =====
+	-- ==================== LAYOUT ====================
+	local pad_x = 10
+	local area_ax = self.ax + pad_x
+	local area_bx = self.bx - pad_x
+	local area_w  = area_bx - area_ax
+
+	local btn_h = 42
+	local btn_w = 42
+	local btn_gap = 6
+	local block_gap = 10
+	local progress_h = 16
+	local row_gap = 10
+
+	-- Responsive: detect if too narrow for single row (vertical/portrait video).
+	local is_narrow = area_w < 500
+	local btn_row_y, progress_y
+	if is_narrow then
+		-- Two-row layout: progress bar on top, then row 1 (main), then row 2 (right buttons).
+		local row2_y = self.by - btn_h - 2
+		btn_row_y = row2_y - btn_h - row_gap
+		progress_y = btn_row_y - row_gap - progress_h
+	else
+		btn_row_y = self.by - btn_h - 4
+		progress_y = btn_row_y - row_gap - progress_h
+	end
+
+	-- ==================== 1. PROGRESS BAR (full width, bigger + smoother) ====================
+	draw_glass({
+		x = area_ax, y = progress_y, w = area_w, h = progress_h, r = progress_h / 2,
+		intensity = lg.intensity * 1.1, show_frost = lg.show_frost,
+		shadow_blur = 24,
+	})
+
+	local progress = (state.duration and state.duration > 0)
+		and ((state.time or 0) / state.duration) or 0
+	if progress < 0 then progress = 0 elseif progress > 1 then progress = 1 end
+
+	local trk_inset = 4
+	local trk_h = progress_h - trk_inset * 2
+	local trk_ax = area_ax + trk_inset
+	local trk_bx = area_bx - trk_inset
+	local trk_y  = progress_y + trk_inset
+	local trk_w  = trk_bx - trk_ax
+	emit_pill(trk_ax, trk_y, trk_bx, trk_h, 'FFFFFF', '&H90&')
+	local fill_x = trk_ax + math.floor(trk_w * progress)
+	if fill_x > trk_ax + trk_h then
+		emit_pill(trk_ax, trk_y, fill_x, trk_h, 'FFFFFF', '&H20&')
+	end
+	local progress_hitbox = {ax = area_ax, ay = progress_y, bx = area_bx, by = progress_y + progress_h}
+
+	if state.chapters and #state.chapters > 0 and state.duration and state.duration > 0 then
+		for _, chapter in ipairs(state.chapters) do
+			if chapter.time > 0 and chapter.time < state.duration then
+				local tx = trk_ax + math.floor(trk_w * (chapter.time / state.duration))
+				ass:new_event()
+				ass:append(string.format(
+					'{\\an7\\pos(0,0)\\bord0\\shad0\\1c&HFFFFFF&\\1a&H50&\\p1}m %d %d l %d %d l %d %d l %d %d{\\p0}',
+					tx, trk_y, tx + 2, trk_y, tx + 2, trk_y + trk_h, tx, trk_y + trk_h
+				))
+			end
+		end
+	end
+
+	-- ==================== 2. BUTTON ROW ====================
+	local cx = area_ax
+
+	-- Play / pause (spring hover-scale).
+	local play_rect = {ax = cx, ay = btn_row_y, bx = cx + btn_w, by = btn_row_y + btn_h}
+	local is_play_hover = get_point_to_rectangle_proximity(cursor, play_rect) == 0
+	local hover_target = is_play_hover and 1 or 0
+	if math.abs(self._lg_play_hover - hover_target) > 0.01 then
+		self._lg_play_hover = self._lg_play_hover + (hover_target - self._lg_play_hover) * 0.25
+		request_render()
+	end
+	local motion = lg.motion or nil
+	local hover_t = motion and motion.spring_out(self._lg_play_hover) or self._lg_play_hover
+	local play_scale = 1 + 0.06 * hover_t
+	local sw = btn_w * play_scale
+	local sh = btn_h * play_scale
+	draw_glass({
+		x = cx - (sw - btn_w) / 2, y = btn_row_y - (sh - btn_h) / 2, w = sw, h = sh, r = sh / 2,
+		intensity = lg.intensity * (1 + 0.2 * hover_t), show_frost = lg.show_frost, shadow_blur = 20,
+	})
+	local play_icon = state.pause and 'play' or 'pause'
+	local play_icon_path = liquid_icons_lib.get(play_icon)
+	if play_icon_path then
+		local pscale = (btn_h * 0.60) / 24
+		ass:new_event()
+		ass:append(string.format(
+			'{\\an7\\pos(%d,%d)\\bord0\\shad0\\1c&H%s&\\1a&H0F&\\fscx%d\\fscy%d\\p1}%s{\\p0}',
+			cx + (btn_w - 24 * pscale) / 2, btn_row_y + (btn_h - 24 * pscale) / 2,
+			ink_bgr, pscale * 100, pscale * 100, play_icon_path
+		))
+	end
+	cx = cx + btn_w + block_gap
+
+	-- Prev + Next in one block.
+	local pn_btn = btn_w + 6
+	local pn_block_w = pn_btn * 2 + 2
+	draw_glass({ x = cx, y = btn_row_y, w = pn_block_w, h = btn_h, r = btn_h / 2, intensity = lg.intensity, show_frost = lg.show_frost, shadow_blur = 20 })
+	local prev_rect = {ax = cx, ay = btn_row_y, bx = cx + pn_btn, by = btn_row_y + btn_h}
+	local next_cx = cx + pn_btn + 2
+	local next_rect = {ax = next_cx, ay = btn_row_y, bx = next_cx + pn_btn, by = btn_row_y + btn_h}
+	for _, idef in ipairs({{cx, pn_btn, 'prev'}, {next_cx, pn_btn, 'next'}}) do
+		local icon_path = liquid_icons_lib.get(idef[3])
+		if icon_path then
+			local s = (btn_h * 0.58) / 24
+			ass:new_event()
+			ass:append(string.format(
+				'{\\an7\\pos(%d,%d)\\bord0\\shad0\\1c&H%s&\\1a&H10&\\fscx%d\\fscy%d\\p1}%s{\\p0}',
+				idef[1] + (idef[2] - 24 * s) / 2, btn_row_y + (btn_h - 24 * s) / 2,
+				ink_bgr, s * 100, s * 100, icon_path
+			))
+		end
+	end
+	cx = cx + pn_block_w + block_gap
+
+	-- Speed button (speedometer icon).
+	local speed_rect = {ax = cx, ay = btn_row_y, bx = cx + btn_w, by = btn_row_y + btn_h}
+	local speed_hover = get_point_to_rectangle_proximity(cursor, speed_rect) == 0
+	draw_button(cx, btn_row_y, btn_w, btn_h, 'speed', speed_hover)
+	cx = cx + btn_w + btn_gap
+
+	-- Quality button: shows current resolution + opens quality picker.
+	local vid_h = mp.get_property_number('video-params/h', 0)
+	local vid_w = mp.get_property_number('video-params/w', 0)
+	local quality_label = 'HD'
+	if vid_h >= 4320 then quality_label = '8K'
+	elseif vid_h >= 2160 then quality_label = '4K'
+	elseif vid_h >= 1440 then quality_label = '1440p'
+	elseif vid_h >= 1080 then quality_label = '1080p'
+	elseif vid_h >= 720 then quality_label = '720p'
+	elseif vid_h >= 480 then quality_label = '480p'
+	elseif vid_h >= 360 then quality_label = '360p'
+	elseif vid_h >= 240 then quality_label = '240p'
+	elseif vid_h >= 144 then quality_label = '144p'
+	elseif vid_h > 0 then quality_label = tostring(vid_h) .. 'p'
+	end
+	local quality_fs = is_narrow and 17 or 20
+	local quality_w = math.max(btn_w + 20, #quality_label * 12 + 24)
+	local quality_rect = {ax = cx, ay = btn_row_y, bx = cx + quality_w, by = btn_row_y + btn_h}
+	local quality_hover = get_point_to_rectangle_proximity(cursor, quality_rect) == 0
+	draw_text_button(cx, btn_row_y, quality_w, btn_h, quality_label, quality_hover, quality_fs)
+	cx = cx + quality_w + block_gap
+
+	-- Time + percentage in one block.
+	local time_str = string.format('%s / %s',
+		_lg_format_time(state.time or 0),
+		_lg_format_time(state.duration or 0))
+	local pct = math.floor(progress * 100)
+	local time_display = time_str .. '   ' .. pct .. ' %'
+	local time_fs = is_narrow and 17 or 22
+	local time_block_w = is_narrow and math.max(150, #time_display * 10 + 20) or math.max(260, #time_display * 13 + 24)
+	draw_glass({ x = cx, y = btn_row_y, w = time_block_w, h = btn_h, r = btn_h / 2, intensity = lg.intensity * 0.9, show_frost = lg.show_frost, shadow_blur = 20 })
+	ass:new_event()
+	ass:append(string.format(
+		'{\\an5\\pos(%d,%d)\\fnGeist\\fs%d\\bord0\\shad0\\1c&H%s&}%s',
+		cx + time_block_w / 2, btn_row_y + btn_h / 2,
+		time_fs, ink_bgr, time_display
+	))
+	cx = cx + time_block_w + block_gap
+
+	-- Volume icon + slider + percentage.
+	local vol_slider_w = is_narrow and 80 or 110
+	local vol_pct_w = 56
+	local vol_block_w = btn_w + 8 + vol_slider_w + vol_pct_w
+	local vol_block_x = cx
+	draw_glass({ x = cx, y = btn_row_y, w = vol_block_w, h = btn_h, r = btn_h / 2, intensity = lg.intensity * 0.9, show_frost = lg.show_frost, shadow_blur = 20 })
+	local vol_icon_rect = {ax = cx, ay = btn_row_y, bx = cx + btn_w, by = btn_row_y + btn_h}
+	local vol_icon = 'volume_up'
+	if state.mute then vol_icon = 'volume_off'
+	elseif (state.volume or 0) <= 0 then vol_icon = 'volume_mute'
+	elseif (state.volume or 0) <= 60 then vol_icon = 'volume_down'
+	end
+	local vi_path = liquid_icons_lib.get(vol_icon)
+	if vi_path then
+		local vs = (btn_h * 0.55) / 24
+		ass:new_event()
+		ass:append(string.format(
+			'{\\an7\\pos(%d,%d)\\bord0\\shad0\\1c&H%s&\\1a&H10&\\fscx%d\\fscy%d\\p1}%s{\\p0}',
+			cx + (btn_w - 24 * vs) / 2, btn_row_y + (btn_h - 24 * vs) / 2,
+			ink_bgr, vs * 100, vs * 100, vi_path
+		))
+	end
+	local vs_ax = cx + btn_w + 8
+	local vs_bx = cx + btn_w + 8 + vol_slider_w
+	local vs_h = 8
+	local vs_y = btn_row_y + (btn_h - vs_h) / 2
+	emit_pill(vs_ax, vs_y, vs_bx, vs_h, 'FFFFFF', '&H80&')
+	local vol_frac = math.min((state.volume or 0) / (state.volume_max or 100), 1)
+	if vol_frac < 0 then vol_frac = 0 end
+	local vol_fill_w = vs_bx - vs_ax
+	local vol_filled_x = vs_ax + math.floor(vol_fill_w * vol_frac)
+	if vol_filled_x > vs_ax + vs_h then
+		emit_pill(vs_ax, vs_y, vol_filled_x, vs_h, 'FFFFFF', '&H20&')
+	end
+	-- Volume percentage text (centered between slider end and block end).
+	local vol_pct_text = tostring(math.floor((state.volume or 0) + 0.5)) .. ' %'
+	local vol_pct_center_x = (vs_bx + cx + vol_block_w) / 2
+	ass:new_event()
+	ass:append(string.format(
+		'{\\an5\\pos(%d,%d)\\fnGeist\\fs18\\bord0\\shad0\\1c&H%s&}%s',
+		vol_pct_center_x, btn_row_y + btn_h / 2, ink_bgr, vol_pct_text
+	))
+	local vol_slider_rect = {ax = vs_ax, ay = btn_row_y, bx = vs_bx, by = btn_row_y + btn_h}
+	local vol_block_rect = {ax = vol_block_x, ay = btn_row_y, bx = vol_block_x + vol_block_w, by = btn_row_y + btn_h}
+	self._lg_vol_block_rect = vol_block_rect
+	cx = cx + vol_block_w + block_gap
+
+	-- Right-side buttons. On narrow screens, use row 2.
+	local rrow_y = is_narrow and (self.by - btn_h - 2) or btn_row_y
+	local rx = area_bx
+	local rbtn = btn_w + 6
+
+	-- Fullscreen
+	rx = rx - rbtn
+	local fs_rect = {ax = rx, ay = rrow_y, bx = rx + rbtn, by = rrow_y + btn_h}
+	local fs_hover = get_point_to_rectangle_proximity(cursor, fs_rect) == 0
+	draw_button(rx, rrow_y, rbtn, btn_h, state.fullscreen and 'fullscreen_exit' or 'fullscreen_enter', fs_hover, 0.75)
+	rx = rx - btn_gap
+
+	-- Settings
+	rx = rx - rbtn
+	local settings_rect = {ax = rx, ay = rrow_y, bx = rx + rbtn, by = rrow_y + btn_h}
+	local settings_hover = get_point_to_rectangle_proximity(cursor, settings_rect) == 0
+	draw_button(rx, rrow_y, rbtn, btn_h, 'settings', settings_hover, 0.75)
+	rx = rx - btn_gap
+
+	-- Subtitle: bold "CC" text
+	local cc_w = rbtn + 12
+	rx = rx - cc_w
+	local sub_rect = {ax = rx, ay = rrow_y, bx = rx + cc_w, by = rrow_y + btn_h}
+	local sub_hover = get_point_to_rectangle_proximity(cursor, sub_rect) == 0
+	draw_text_button(rx, rrow_y, cc_w, btn_h, 'CC', sub_hover, 20)
+	rx = rx - btn_gap
+
+	-- Audio: Material Icon headphones (since we have the font now)
+	local audio_w = rbtn + 4
+	rx = rx - audio_w
+	local audio_rect = {ax = rx, ay = rrow_y, bx = rx + audio_w, by = rrow_y + btn_h}
+	local audio_hover = get_point_to_rectangle_proximity(cursor, audio_rect) == 0
+	draw_glass({
+		x = rx, y = rrow_y, w = audio_w, h = btn_h, r = btn_h / 2,
+		intensity = lg.intensity * (audio_hover and 1.2 or 1.0), show_frost = lg.show_frost, shadow_blur = 20,
+	})
+	ass:new_event()
+	ass:append(string.format(
+		'{\\an5\\pos(%d,%d)\\fnMaterialIconsRound-Regular\\fs%d\\bord0\\shad0\\1c&H%s&}headphones',
+		math.floor(rx + audio_w / 2), math.floor(rrow_y + btn_h / 2 + 1), 24, ink_bgr
+	))
+	rx = rx - btn_gap
+
+	-- Playlist: Material Icon playlist_play (centered)
+	local pl_w = btn_h
+	rx = rx - pl_w
+	local playlist_rect = {ax = rx, ay = rrow_y, bx = rx + pl_w, by = rrow_y + btn_h}
+	local playlist_hover = get_point_to_rectangle_proximity(cursor, playlist_rect) == 0
+	draw_glass({
+		x = rx, y = rrow_y, w = pl_w, h = btn_h, r = btn_h / 2,
+		intensity = lg.intensity * (playlist_hover and 1.2 or 1.0), show_frost = lg.show_frost, shadow_blur = 20,
+	})
+	ass:new_event()
+	ass:append(string.format(
+		'{\\an5\\pos(%d,%d)\\fnMaterialIconsRound-Regular\\fs%d\\bord0\\shad0\\1c&H%s&}playlist_play',
+		math.floor(rx + pl_w / 2), math.floor(rrow_y + btn_h / 2 + 1), 26, ink_bgr
+	))
+
+	-- ==================== 3. INTERACTIVITY ====================
 	if cursor and cursor.zone then
-		-- Play / pause toggle.
-		cursor:zone('primary_down', play_hitbox, function()
-			mp.commandv('cycle', 'pause')
+		cursor:zone('primary_down', play_rect, function() mp.commandv('cycle', 'pause') end)
+		cursor:zone('primary_down', prev_rect, function() mp.command('playlist-prev') end)
+		cursor:zone('primary_down', next_rect, function() mp.command('playlist-next') end)
+		cursor:zone('primary_down', speed_rect, function()
+			local speeds = {0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0}
+			local items = {}
+			for _, s in ipairs(speeds) do
+				local label = (s == 1.0) and 'Normal' or string.format('%.2gx', s)
+				local active = math.abs((state.speed or 1) - s) < 0.01
+				items[#items + 1] = {title = label, value = 'set speed ' .. s, active = active}
+			end
+			mp.commandv('script-message-to', 'uosc', 'open-menu', require('mp.utils').format_json({
+				type = 'lg_speed', title = 'Speed', items = items
+			}))
+		end)
+		cursor:zone('primary_down', quality_rect, function()
+			local path = mp.get_property('path', '')
+			local is_stream = path:match('^https?://') or path:match('^ytdl://')
+			if is_stream then
+				mp.command('script-binding uosc/stream-quality')
+			else
+				local vw = mp.get_property_number('video-params/w', 0)
+				local vh = mp.get_property_number('video-params/h', 0)
+				local codec = mp.get_property('video-codec', '?')
+				local fps = mp.get_property_number('container-fps', 0)
+				local fps_str = fps > 0 and string.format('%.1f fps', fps) or ''
+				local br = mp.get_property_number('video-bitrate', 0)
+				local br_str = br > 0 and string.format('%.1f Mbps', br / 1000000) or ''
+				local info = string.format('%dx%d  %s  %s  %s', vw, vh, codec, fps_str, br_str)
+				mp.commandv('script-message-to', 'uosc', 'open-menu', require('mp.utils').format_json({
+					type = 'lg_quality', title = 'Video Quality',
+					items = {{title = info, value = '', active = true}}
+				}))
+			end
+		end)
+		cursor:zone('primary_down', vol_icon_rect, function() mp.commandv('cycle', 'mute') end)
+		cursor:zone('primary_down', vol_slider_rect, function()
+			local frac = (cursor.x - vs_ax) / vol_fill_w
+			if frac < 0 then frac = 0 elseif frac > 1 then frac = 1 end
+			mp.commandv('set', 'volume', math.floor(frac * (state.volume_max or 100)))
 		end)
 
-		-- Progress: click to seek + drag to scrub. Same pattern as
-		-- Timeline:handle_cursor_down — pause while dragging, restore on
-		-- release.
-		local seek_inset = track_inset
-		local seek_x1 = progress_x + seek_inset
-		local seek_w  = progress_w - 2 * seek_inset
+		-- All scroll handling is routed through input.conf → lg-scroll-up/down
+		-- script messages (global handler below). No cursor:zone wheel
+		-- registrations here — they would intercept events before input.conf.
+
+		-- Progress bar click-to-seek + drag scrub.
+		local seek_ax = trk_ax
+		local seek_w  = trk_w
 		local function seek_to_cursor(fast)
 			if not (state.duration and state.duration > 0) then return end
-			local cx = cursor.x - seek_x1
-			if cx < 0 then cx = 0 elseif cx > seek_w then cx = seek_w end
-			local p = cx / seek_w
-			mp.commandv('seek', state.duration * p, fast and 'absolute+keyframes' or 'absolute+exact')
+			local cx_pos = cursor.x - seek_ax
+			if cx_pos < 0 then cx_pos = 0 elseif cx_pos > seek_w then cx_pos = seek_w end
+			mp.commandv('seek', state.duration * cx_pos / seek_w, fast and 'absolute+keyframes' or 'absolute+exact')
 		end
 		cursor:zone('primary_down', progress_hitbox, function()
 			self._lg_seek_drag = {pause_was = state.pause}
@@ -636,20 +859,87 @@ function Controls:render()
 				end
 			end)
 		end)
-		-- Drag scrubbing handled by Controls:on_global_mouse_move below.
 		self._lg_seek_handler = seek_to_cursor
+
+		cursor:zone('primary_down', fs_rect, function() mp.commandv('cycle', 'fullscreen') end)
+		cursor:zone('primary_down', settings_rect, function() mp.command('script-binding uosc/menu') end)
+		cursor:zone('primary_down', sub_rect, function() mp.command('script-binding uosc/subtitles') end)
+		cursor:zone('primary_down', audio_rect, function() mp.command('script-binding uosc/audio') end)
+		cursor:zone('primary_down', playlist_rect, function() mp.command('script-binding uosc/items') end)
+	end
+
+	-- ==================== 4. CENTERED OSD OVERLAYS (macOS style) ====================
+	-- Centered on the full player window, not the controls area.
+	local now = mp.get_time()
+	local win_cx = display.width / 2
+	local win_cy = display.height / 2
+
+	-- Only one OSD at a time: volume takes priority if both are active.
+	local show_vol_osd = now < self._lg_vol_osd_until
+	local show_seek_osd = (not show_vol_osd) and now < self._lg_seek_osd_until
+
+	if show_vol_osd then
+		local osd_w, osd_h = 220, 180
+		local osd_x = win_cx - osd_w / 2
+		local osd_y = win_cy - osd_h / 2
+		draw_glass({
+			x = osd_x, y = osd_y, w = osd_w, h = osd_h, r = 28,
+			intensity = lg.intensity * 1.8, show_frost = lg.show_frost, shadow_blur = 40,
+		})
+		-- Big speaker icon
+		local vol_icon_name = 'volume_up'
+		if state.mute then vol_icon_name = 'volume_off'
+		elseif (state.volume or 0) <= 0 then vol_icon_name = 'volume_mute'
+		elseif (state.volume or 0) <= 60 then vol_icon_name = 'volume_down'
+		end
+		ass:new_event()
+		ass:append(string.format(
+			'{\\an5\\pos(%d,%d)\\fnMaterialIconsRound-Regular\\fs90\\bord0\\shad0\\1c&H%s&}%s',
+			win_cx, win_cy - 18, ink_bgr, vol_icon_name
+		))
+		-- Volume percentage below
+		local vol_text = tostring(math.floor((state.volume or 0) + 0.5)) .. ' %'
+		ass:new_event()
+		ass:append(string.format(
+			'{\\an5\\pos(%d,%d)\\fnGeist\\fs28\\b1\\bord0\\shad0\\1c&H%s&}%s',
+			win_cx, win_cy + 52, ink_bgr, vol_text
+		))
+		if now < self._lg_vol_osd_until - 0.05 then request_render() end
+	end
+
+	if show_seek_osd then
+		local osd_w, osd_h = 220, 180
+		local osd_x = win_cx - osd_w / 2
+		local osd_y = win_cy - osd_h / 2
+		draw_glass({
+			x = osd_x, y = osd_y, w = osd_w, h = osd_h, r = 28,
+			intensity = lg.intensity * 1.8, show_frost = lg.show_frost, shadow_blur = 40,
+		})
+		-- Big video camera icon (larger to fill the block better)
+		ass:new_event()
+		ass:append(string.format(
+			'{\\an5\\pos(%d,%d)\\fnMaterialIconsRound-Regular\\fs90\\bord0\\shad0\\1c&H%s&}videocam',
+			win_cx, win_cy - 18, ink_bgr
+		))
+		-- Progress percentage below
+		local seek_pct = (state.duration and state.duration > 0)
+			and math.floor(((state.time or 0) / state.duration) * 100) or 0
+		local seek_text = tostring(seek_pct) .. ' %'
+		ass:new_event()
+		ass:append(string.format(
+			'{\\an5\\pos(%d,%d)\\fnGeist\\fs28\\b1\\bord0\\shad0\\1c&H%s&}%s',
+			win_cx, win_cy + 52, ink_bgr, seek_text
+		))
+		if now < self._lg_seek_osd_until - 0.05 then request_render() end
 	end
 
 	return ass
 end
 
--- Drag scrubbing for progress pebble. Triggered by uosc's global mouse-move
--- dispatch (same hook Timeline uses).
+-- Drag scrubbing for progress bar.
 function Controls:on_global_mouse_move()
 	if self._lg_seek_drag and self._lg_seek_handler then
-		local fast = state.is_video and cursor and cursor.get_velocity
-			and math.abs(cursor:get_velocity().x) > 20
-		self._lg_seek_handler(fast)
+		self._lg_seek_handler(false)
 	end
 end
 
@@ -659,6 +949,46 @@ function Controls:on_global_mouse_leave()
 		self._lg_seek_drag = nil
 	end
 end
+
+-- Global scroll handler: input.conf routes WHEEL_UP/DOWN here.
+-- If cursor is over the volume block, adjust volume + show volume OSD.
+-- Otherwise, seek + show seek OSD.
+mp.register_script_message('lg-scroll-up', function()
+	local ctrl = Elements and Elements.controls
+	if not ctrl then mp.commandv('no-osd', 'seek', 5, 'relative+exact'); return end
+	-- Check if cursor is over the volume block area
+	if ctrl._lg_vol_block_rect and cursor and
+	   cursor.x >= ctrl._lg_vol_block_rect.ax and cursor.x <= ctrl._lg_vol_block_rect.bx and
+	   cursor.y >= ctrl._lg_vol_block_rect.ay and cursor.y <= ctrl._lg_vol_block_rect.by then
+		local new_vol = math.min((state.volume or 0) + 5, state.volume_max or 100)
+		mp.commandv('no-osd', 'set', 'volume', new_vol)
+		ctrl._lg_vol_osd_until = mp.get_time() + 2
+		ctrl._lg_seek_osd_until = 0
+	else
+		mp.commandv('no-osd', 'seek', 5, 'relative+exact')
+		ctrl._lg_seek_osd_until = mp.get_time() + 2
+		ctrl._lg_vol_osd_until = 0
+	end
+	request_render()
+end)
+
+mp.register_script_message('lg-scroll-down', function()
+	local ctrl = Elements and Elements.controls
+	if not ctrl then mp.commandv('no-osd', 'seek', -5, 'relative+exact'); return end
+	if ctrl._lg_vol_block_rect and cursor and
+	   cursor.x >= ctrl._lg_vol_block_rect.ax and cursor.x <= ctrl._lg_vol_block_rect.bx and
+	   cursor.y >= ctrl._lg_vol_block_rect.ay and cursor.y <= ctrl._lg_vol_block_rect.by then
+		local new_vol = math.max((state.volume or 0) - 5, 0)
+		mp.commandv('no-osd', 'set', 'volume', new_vol)
+		ctrl._lg_vol_osd_until = mp.get_time() + 2
+		ctrl._lg_seek_osd_until = 0
+	else
+		mp.commandv('no-osd', 'seek', -5, 'relative+exact')
+		ctrl._lg_seek_osd_until = mp.get_time() + 2
+		ctrl._lg_vol_osd_until = 0
+	end
+	request_render()
+end)
 -- ===== /Liquid Glass skin patch =====
 
 function Controls:destroy_elements()

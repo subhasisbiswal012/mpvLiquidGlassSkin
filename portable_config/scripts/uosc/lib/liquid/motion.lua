@@ -34,4 +34,12 @@ function M.liquid_fade(t)
   return eased, 0.96 + 0.04 * eased
 end
 
+function M.apply_reduced(value)
+  if value == nil or value == false or value == 'no' or value == 'false' or value == 0 or value == '0' then
+    M.reduced = false
+  else
+    M.reduced = true
+  end
+end
+
 return M

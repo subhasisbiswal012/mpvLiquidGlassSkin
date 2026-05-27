@@ -51,148 +51,70 @@ function VolumeSlider:handle_wheel_up() self:set_volume(state.volume + options.v
 function VolumeSlider:handle_wheel_down() self:set_volume(state.volume - options.volume_step) end
 
 function VolumeSlider:render()
-	local visibility = self:get_visibility()
-	local ax, ay, bx, by = self.ax, self.ay, self.bx, self.by
-	local width, height = bx - ax, by - ay
+    local visibility = self:get_visibility()
+    local ax, ay, bx, by = self.ax, self.ay, self.bx, self.by
+    local width, height = bx - ax, by - ay
+    if width <= 0 or height <= 0 or visibility <= 0 then return end
 
-	if width <= 0 or height <= 0 or visibility <= 0 then return end
+    cursor:zone('primary_down', self, function()
+        self.pressed = true
+        self:set_from_cursor()
+        cursor:once('primary_up', function() self.pressed = false end)
+    end)
+    cursor:zone('wheel_down', self, function() self:handle_wheel_down() end)
+    cursor:zone('wheel_up', self, function() self:handle_wheel_up() end)
 
-	cursor:zone('primary_down', self, function()
-		self.pressed = true
-		self:set_from_cursor()
-		cursor:once('primary_up', function() self.pressed = false end)
-	end)
-	cursor:zone('wheel_down', self, function() self:handle_wheel_down() end)
-	cursor:zone('wheel_up', self, function() self:handle_wheel_up() end)
+    local glass = require('lib/liquid/glass')
+    local theme = require('lib/liquid/theme')
+    local lg = _G.liquid_glass or { intensity = 1.0, show_frost = true }
 
-	local ass = assdraw.ass_new()
-	local nudge_y, nudge_size = self.draw_nudge and self.nudge_y or -math.huge, self.nudge_size
-	local volume_y = self.ay + self.border_size +
-		((height - (self.border_size * 2)) * (1 - math.min(state.volume / state.volume_max, 1)))
+    local ass = assdraw.ass_new()
+    local function draw_glass(geom)
+        for layer_text in glass.draw(geom):gmatch('[^\n]+') do
+            if layer_text:sub(1, 2) ~= '--' and layer_text ~= '' then
+                ass:new_event()
+                ass:append(layer_text)
+            end
+        end
+    end
 
-	-- Draws a rectangle with nudge at requested position
-	---@param p number Padding from slider edges.
-	---@param r number Border radius.
-	---@param cy? number A y coordinate where to clip the path from the bottom.
-	function create_nudged_path(p, r, cy)
-		cy = cy or ay + p
-		local ax, bx, by = ax + p, bx - p, by - p
-		local d, rh = r * 2, r / 2
-		local nudge_size = ((QUARTER_PI_SIN * (nudge_size - p)) + p) / QUARTER_PI_SIN
-		local path = assdraw.ass_new()
-		path:move_to(bx - r, by)
-		path:line_to(ax + r, by)
-		if cy > by - d then
-			local subtracted_radius = (d - (cy - (by - d))) / 2
-			local xbd = (r - subtracted_radius * 1.35) -- x bezier delta
-			path:bezier_curve(ax + xbd, by, ax + xbd, cy, ax + r, cy)
-			path:line_to(bx - r, cy)
-			path:bezier_curve(bx - xbd, cy, bx - xbd, by, bx - r, by)
-		else
-			path:bezier_curve(ax + rh, by, ax, by - rh, ax, by - r)
-			local nudge_bottom_y = nudge_y + nudge_size
+    local pebble_r = math.min(width, height) / 2
+    draw_glass({
+        x = ax, y = ay, w = width, h = height, r = pebble_r,
+        intensity = lg.intensity, show_frost = lg.show_frost,
+    })
 
-			if cy + rh <= nudge_bottom_y then
-				path:line_to(ax, nudge_bottom_y)
-				if cy <= nudge_y then
-					path:line_to((ax + nudge_size), nudge_y)
-					local nudge_top_y = nudge_y - nudge_size
-					if cy <= nudge_top_y then
-						local r, rh = r, rh
-						if cy > nudge_top_y - r then
-							r = nudge_top_y - cy
-							rh = r / 2
-						end
-						path:line_to(ax, nudge_top_y)
-						path:line_to(ax, cy + r)
-						path:bezier_curve(ax, cy + rh, ax + rh, cy, ax + r, cy)
-						path:line_to(bx - r, cy)
-						path:bezier_curve(bx - rh, cy, bx, cy + rh, bx, cy + r)
-						path:line_to(bx, nudge_top_y)
-					else
-						local triangle_side = cy - nudge_top_y
-						path:line_to((ax + triangle_side), cy)
-						path:line_to((bx - triangle_side), cy)
-					end
-					path:line_to((bx - nudge_size), nudge_y)
-				else
-					local triangle_side = nudge_bottom_y - cy
-					path:line_to((ax + triangle_side), cy)
-					path:line_to((bx - triangle_side), cy)
-				end
-				path:line_to(bx, nudge_bottom_y)
-			else
-				path:line_to(ax, cy + r)
-				path:bezier_curve(ax, cy + rh, ax + rh, cy, ax + r, cy)
-				path:line_to(bx - r, cy)
-				path:bezier_curve(bx - rh, cy, bx, cy + rh, bx, cy + r)
-			end
-			path:line_to(bx, by - r)
-			path:bezier_curve(bx, by - rh, bx - rh, by, bx - r, by)
-		end
-		return path
-	end
+    local vol_fraction = math.min((state.volume or 0) / (state.volume_max or 100), 1)
+    if vol_fraction < 0 then vol_fraction = 0 end
+    local fill_inset = 4
+    local fill_full_h = height - fill_inset * 2
+    local fill_h = math.floor(fill_full_h * vol_fraction)
+    if fill_h > 0 then
+        local accent = theme.current.accent
+        local accent_bgr = accent:sub(5, 6) .. accent:sub(3, 4) .. accent:sub(1, 2)
+        local fax = ax + fill_inset
+        local fbx = bx - fill_inset
+        local fby = by - fill_inset
+        local fay = fby - fill_h
+        ass:new_event()
+        ass:append(string.format(
+            '{\\an7\\pos(0,0)\\bord0\\shad0\\1c&H%s&\\1a&H30&\\p1}m %d %d l %d %d l %d %d l %d %d{\\p0}',
+            accent_bgr, fax, fay, fbx, fay, fbx, fby, fax, fby
+        ))
+    end
 
-	-- BG & FG paths
-	local bg_path = create_nudged_path(0, state.radius + self.border_size)
-	local fg_path = create_nudged_path(self.border_size, state.radius, volume_y)
+    if self.draw_nudge then
+        ass:new_event()
+        ass:append(string.format(
+            '{\\an7\\pos(0,0)\\bord0\\shad0\\1c&HFFFFFF&\\1a&H80&\\p1}m %d %d l %d %d l %d %d l %d %d{\\p0}',
+            ax + fill_inset, self.nudge_y,
+            bx - fill_inset, self.nudge_y,
+            bx - fill_inset, self.nudge_y + 1,
+            ax + fill_inset, self.nudge_y + 1
+        ))
+    end
 
-	-- Background
-	ass:new_event()
-	ass:append('{\\rDefault\\an7\\blur0\\bord0\\1c&H' .. bg ..
-		'\\iclip(' .. fg_path.scale .. ', ' .. fg_path.text .. ')}')
-	ass:opacity(config.opacity.slider, visibility)
-	ass:pos(0, 0)
-	ass:draw_start()
-	ass:append(bg_path.text)
-	ass:draw_stop()
-
-	-- Foreground
-	ass:new_event()
-	ass:append('{\\rDefault\\an7\\blur0\\bord0\\1c&H' .. fg .. '}')
-	ass:opacity(config.opacity.slider_gauge, visibility)
-	ass:pos(0, 0)
-	ass:draw_start()
-	ass:append(fg_path.text)
-	ass:draw_stop()
-
-	-- Current volume value
-	local volume_string = tostring(round(state.volume * 10) / 10)
-	local font_size = round(((width * 0.6) - (#volume_string * (width / 20))) * options.font_scale)
-	if volume_y < self.by - self.spacing then
-		ass:txt(self.ax + (width / 2), self.by - self.spacing, 2, volume_string, {
-			size = font_size,
-			color = fgt,
-			opacity = visibility,
-			clip = '\\clip(' .. fg_path.scale .. ', ' .. fg_path.text .. ')',
-		})
-	end
-	if volume_y > self.by - self.spacing - font_size then
-		ass:txt(self.ax + (width / 2), self.by - self.spacing, 2, volume_string, {
-			size = font_size,
-			color = bgt,
-			opacity = visibility,
-			clip = '\\iclip(' .. fg_path.scale .. ', ' .. fg_path.text .. ')',
-		})
-	end
-
-	-- Disabled stripes for no audio
-	if not state.has_audio then
-		local fg_100_path = create_nudged_path(self.border_size, state.radius)
-		local texture_opts = {
-			size = 200,
-			color = 'ffffff',
-			opacity = visibility * 0.1,
-			anchor_x = ax,
-			clip = '\\clip(' .. fg_100_path.scale .. ',' .. fg_100_path.text .. ')',
-		}
-		ass:texture(ax, ay, bx, by, 'a', texture_opts)
-		texture_opts.color = '000000'
-		texture_opts.anchor_x = ax + texture_opts.size / 28
-		ass:texture(ax, ay, bx, by, 'a', texture_opts)
-	end
-
-	return ass
+    return ass
 end
 
 --[[ Volume ]]
@@ -246,38 +168,64 @@ function Volume:on_controls_reflow() self:update_dimensions() end
 function Volume:on_options() self:update_dimensions() end
 
 function Volume:render()
-	local visibility = self:get_visibility()
-	if visibility <= 0 then return end
+    local visibility = self:get_visibility()
+    if visibility <= 0 then return end
 
-	-- Reset volume on secondary click
-	cursor:zone('secondary_click', self, function()
-		mp.set_property_native('mute', false)
-		mp.set_property_native('volume', 100)
-	end)
+    cursor:zone('secondary_click', self, function()
+        mp.set_property_native('mute', false)
+        mp.set_property_native('volume', 100)
+    end)
 
-	-- Mute button
-	local mute_rect = {ax = self.ax, ay = self.mute_ay, bx = self.bx, by = self.by}
-	cursor:zone('primary_down', mute_rect, function() mp.commandv('cycle', 'mute') end)
-	local ass = assdraw.ass_new()
-	local width_half = (mute_rect.bx - mute_rect.ax) / 2
-	local height_half = (mute_rect.by - mute_rect.ay) / 2
-	local icon_size = math.min(width_half, height_half) * 1.5
-	local icon_name, horizontal_shift = 'volume_up', 0
-	if state.mute then
-		icon_name = 'volume_off'
-	elseif state.volume <= 0 then
-		icon_name, horizontal_shift = 'volume_mute', height_half * 0.25
-	elseif state.volume <= 60 then
-		icon_name, horizontal_shift = 'volume_down', height_half * 0.125
-	end
-	local underlay_opacity = {main = visibility * 0.3, border = visibility}
-	ass:icon(mute_rect.ax + width_half, mute_rect.ay + height_half, icon_size, 'volume_up',
-		{border = options.text_border * state.scale, opacity = underlay_opacity, align = 5}
-	)
-	ass:icon(mute_rect.ax + width_half - horizontal_shift, mute_rect.ay + height_half, icon_size, icon_name,
-		{opacity = visibility, align = 5}
-	)
-	return ass
+    local mute_rect = { ax = self.ax, ay = self.mute_ay, bx = self.bx, by = self.by }
+    cursor:zone('primary_down', mute_rect, function() mp.commandv('cycle', 'mute') end)
+
+    local glass = require('lib/liquid/glass')
+    local icons = require('lib/liquid/icons')
+    local theme = require('lib/liquid/theme')
+    local lg = _G.liquid_glass or { intensity = 1.0, show_frost = true }
+
+    local ass = assdraw.ass_new()
+    local function draw_glass(geom)
+        for layer_text in glass.draw(geom):gmatch('[^\n]+') do
+            if layer_text:sub(1, 2) ~= '--' and layer_text ~= '' then
+                ass:new_event()
+                ass:append(layer_text)
+            end
+        end
+    end
+
+    local mw = mute_rect.bx - mute_rect.ax
+    local mh = mute_rect.by - mute_rect.ay
+    local is_hover = get_point_to_rectangle_proximity(cursor, mute_rect) == 0
+    draw_glass({
+        x = mute_rect.ax, y = mute_rect.ay, w = mw, h = mh, r = math.min(mw, mh) / 2,
+        intensity = lg.intensity * (is_hover and 1.15 or 1.0),
+        show_frost = lg.show_frost,
+    })
+
+    local icon_name = 'volume_up'
+    if state.mute then icon_name = 'volume_off'
+    elseif (state.volume or 0) <= 0 then icon_name = 'volume_mute'
+    elseif (state.volume or 0) <= 60 then icon_name = 'volume_down'
+    end
+
+    local icon_path = icons.get(icon_name)
+    if icon_path then
+        local scale = (math.min(mw, mh) * 0.55) / 24
+        local ink = theme.current.ink
+        local ink_bgr = ink:sub(5, 6) .. ink:sub(3, 4) .. ink:sub(1, 2)
+        ass:new_event()
+        ass:append(string.format(
+            '{\\an7\\pos(%d,%d)\\bord0\\shad0\\1c&H%s&\\1a&H10&\\fscx%d\\fscy%d\\p1}%s{\\p0}',
+            mute_rect.ax + (mw - 24 * scale) / 2,
+            mute_rect.ay + (mh - 24 * scale) / 2,
+            ink_bgr,
+            scale * 100, scale * 100,
+            icon_path
+        ))
+    end
+
+    return ass
 end
 
 return Volume
