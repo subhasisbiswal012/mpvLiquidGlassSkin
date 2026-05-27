@@ -609,37 +609,37 @@ function Controls:render()
 	end
 	cx = cx + btn_w + block_gap
 
-	-- #2: Prev + Next grouped in one glass block.
-	local pn_block_w = btn_w * 2 + 4
-	local pn_block_x = cx
+	-- #1: Prev + Next grouped in one glass block (bigger buttons).
+	local pn_btn = btn_w + 8
+	local pn_block_w = pn_btn * 2 + 6
 	draw_glass({
 		x = cx, y = btn_row_y, w = pn_block_w, h = btn_h, r = btn_h / 2,
 		intensity = lg.intensity, show_frost = lg.show_frost,
 	})
 	-- Prev icon (left half)
-	local prev_rect = {ax = cx, ay = btn_row_y, bx = cx + btn_w, by = btn_row_y + btn_h}
+	local prev_rect = {ax = cx, ay = btn_row_y, bx = cx + pn_btn, by = btn_row_y + btn_h}
 	local prev_icon_path = liquid_icons_lib.get('prev')
 	if prev_icon_path then
-		local iscale = (btn_h * 0.45) / 24
+		local iscale = (btn_h * 0.55) / 24
 		ass:new_event()
 		ass:append(string.format(
 			'{\\an7\\pos(%d,%d)\\bord0\\shad0\\1c&H%s&\\1a&H10&\\fscx%d\\fscy%d\\p1}%s{\\p0}',
-			cx + (btn_w - 24 * iscale) / 2,
+			cx + (pn_btn - 24 * iscale) / 2,
 			btn_row_y + (btn_h - 24 * iscale) / 2,
 			ink_bgr, iscale * 100, iscale * 100,
 			prev_icon_path
 		))
 	end
 	-- Next icon (right half)
-	local next_cx = cx + btn_w + 4
-	local next_rect = {ax = next_cx, ay = btn_row_y, bx = next_cx + btn_w, by = btn_row_y + btn_h}
+	local next_cx = cx + pn_btn + 6
+	local next_rect = {ax = next_cx, ay = btn_row_y, bx = next_cx + pn_btn, by = btn_row_y + btn_h}
 	local next_icon_path = liquid_icons_lib.get('next')
 	if next_icon_path then
-		local iscale = (btn_h * 0.45) / 24
+		local iscale = (btn_h * 0.55) / 24
 		ass:new_event()
 		ass:append(string.format(
 			'{\\an7\\pos(%d,%d)\\bord0\\shad0\\1c&H%s&\\1a&H10&\\fscx%d\\fscy%d\\p1}%s{\\p0}',
-			next_cx + (btn_w - 24 * iscale) / 2,
+			next_cx + (pn_btn - 24 * iscale) / 2,
 			btn_row_y + (btn_h - 24 * iscale) / 2,
 			ink_bgr, iscale * 100, iscale * 100,
 			next_icon_path
@@ -710,7 +710,7 @@ function Controls:render()
 	local vol_slider_rect = {ax = vs_ax, ay = btn_row_y, bx = vs_bx, by = btn_row_y + btn_h}
 	cx = cx + vol_block_w + block_gap
 
-	-- Right-side buttons: Sub | Settings | Fullscreen
+	-- Right-side buttons: Audio | Sub | Settings | Fullscreen
 	local rx = area_bx
 
 	-- Fullscreen
@@ -728,11 +728,23 @@ function Controls:render()
 	draw_button(rx, btn_row_y, btn_w, btn_h, 'settings', settings_hover)
 	rx = rx - btn_gap
 
-	-- Subtitle
+	-- Subtitle (#3: speech-bubble "T" icon)
 	rx = rx - btn_w
 	local sub_rect = {ax = rx, ay = btn_row_y, bx = rx + btn_w, by = btn_row_y + btn_h}
 	local sub_hover = get_point_to_rectangle_proximity(cursor, sub_rect) == 0
 	draw_button(rx, btn_row_y, btn_w, btn_h, 'subtitle', sub_hover)
+	rx = rx - btn_gap
+
+	-- #5: Audio track button (music note icon)
+	rx = rx - btn_w
+	local audio_rect = {ax = rx, ay = btn_row_y, bx = rx + btn_w, by = btn_row_y + btn_h}
+	local audio_hover = get_point_to_rectangle_proximity(cursor, audio_rect) == 0
+	draw_button(rx, btn_row_y, btn_w, btn_h, 'audio_track', audio_hover)
+
+	-- Full controls area hitbox (for scroll routing).
+	local controls_area = {ax = area_ax, ay = progress_y, bx = area_bx, by = btn_row_y + btn_h}
+	-- Volume block hitbox (for volume-only scroll).
+	local vol_block_rect = {ax = vol_block_x, ay = btn_row_y, bx = vol_block_x + vol_block_w, by = btn_row_y + btn_h}
 
 	-- ==================== 3. INTERACTIVITY ====================
 	if cursor and cursor.zone then
@@ -756,11 +768,21 @@ function Controls:render()
 			if frac < 0 then frac = 0 elseif frac > 1 then frac = 1 end
 			mp.commandv('set', 'volume', math.floor(frac * (state.volume_max or 100)))
 		end)
-		cursor:zone('wheel_up', vol_slider_rect, function()
+
+		-- #2: Scroll on volume block = volume control.
+		cursor:zone('wheel_up', vol_block_rect, function()
 			mp.commandv('set', 'volume', math.min((state.volume or 0) + 5, state.volume_max or 100))
 		end)
-		cursor:zone('wheel_down', vol_slider_rect, function()
+		cursor:zone('wheel_down', vol_block_rect, function()
 			mp.commandv('set', 'volume', math.max((state.volume or 0) - 5, 0))
+		end)
+
+		-- #2: Scroll anywhere else on controls = seek forward/back 5s.
+		cursor:zone('wheel_up', controls_area, function()
+			mp.commandv('seek', 5, 'relative+exact')
+		end)
+		cursor:zone('wheel_down', controls_area, function()
+			mp.commandv('seek', -5, 'relative+exact')
 		end)
 
 		local seek_ax = trk_ax
@@ -793,6 +815,10 @@ function Controls:render()
 		end)
 		cursor:zone('primary_down', sub_rect, function()
 			mp.command('script-binding uosc/subtitles')
+		end)
+		-- #5: Audio track picker
+		cursor:zone('primary_down', audio_rect, function()
+			mp.command('script-binding uosc/audio')
 		end)
 	end
 

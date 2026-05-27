@@ -56,11 +56,10 @@ local PIP =
   'm 3 5 l 21 5 b 22 5 22 5 22 6 l 22 18 b 22 19 22 19 21 19 l 3 19 b 2 19 2 19 2 18 l 2 6 b 2 5 2 5 3 5 ' ..
   'm 13 12 l 20 12 l 20 17 l 13 17 l 13 12'
 
--- Subtitle: rounded rect with two subtitle text lines at bottom.
+-- Subtitle: speech bubble with "T" inside (like a text/caption icon).
 local SUBTITLE =
-  'm 4 5 l 20 5 b 21 5 22 6 22 7 l 22 17 b 22 18 21 19 20 19 l 4 19 b 3 19 2 18 2 17 l 2 7 b 2 6 3 5 4 5 ' ..
-  'm 5 13 l 19 13 l 19 14 l 5 14 l 5 13 ' ..
-  'm 7 16 l 17 16 l 17 17 l 7 17 l 7 16'
+  'm 4 4 l 20 4 b 21 4 22 5 22 6 l 22 15 b 22 16 21 17 20 17 l 13 17 l 9 21 l 9 17 l 4 17 b 3 17 2 16 2 15 l 2 6 b 2 5 3 4 4 4 ' ..
+  'm 8 8 l 16 8 l 16 10 l 13 10 l 13 15 l 11 15 l 11 10 l 8 10 l 8 8'
 
 local AUDIO_TRACK =
   'm 10 6 l 18 5 l 18 16 ' ..
