@@ -645,18 +645,18 @@ function Controls:render()
 	draw_button(cx, btn_row_y, btn_w, btn_h, 'speed', speed_hover)
 	cx = cx + btn_w + block_gap
 
-	-- Time + percentage in one block (same font for both, clearly readable).
+	-- Time + percentage in one block.
 	local time_str = string.format('%s / %s',
 		_lg_format_time(state.time or 0),
 		_lg_format_time(state.duration or 0))
 	local pct = math.floor(progress * 100)
-	local time_display = time_str .. '  ' .. pct .. '%'
-	local time_fs = is_narrow and 16 or 20
-	local time_block_w = is_narrow and math.max(140, #time_display * 10 + 20) or math.max(240, #time_display * 12 + 24)
+	local time_display = time_str .. '   ' .. pct .. ' %'
+	local time_fs = is_narrow and 17 or 22
+	local time_block_w = is_narrow and math.max(150, #time_display * 10 + 20) or math.max(260, #time_display * 13 + 24)
 	draw_glass({ x = cx, y = btn_row_y, w = time_block_w, h = btn_h, r = btn_h / 2, intensity = lg.intensity * 0.9, show_frost = lg.show_frost, shadow_blur = 20 })
 	ass:new_event()
 	ass:append(string.format(
-		'{\\an5\\pos(%d,%d)\\fnGeist Mono\\fs%d\\bord0\\shad0\\1c&H%s&}%s',
+		'{\\an5\\pos(%d,%d)\\fnGeist\\fs%d\\bord0\\shad0\\1c&H%s&}%s',
 		cx + time_block_w / 2, btn_row_y + btn_h / 2,
 		time_fs, ink_bgr, time_display
 	))
@@ -696,12 +696,13 @@ function Controls:render()
 	if vol_filled_x > vs_ax + vs_h then
 		emit_pill(vs_ax, vs_y, vol_filled_x, vs_h, 'FFFFFF', '&H20&')
 	end
-	-- Volume percentage text (same style as time text, clearly readable).
-	local vol_pct_text = tostring(math.floor((state.volume or 0) + 0.5)) .. '%'
+	-- Volume percentage text (centered between slider end and block end).
+	local vol_pct_text = tostring(math.floor((state.volume or 0) + 0.5)) .. ' %'
+	local vol_pct_center_x = (vs_bx + cx + vol_block_w) / 2
 	ass:new_event()
 	ass:append(string.format(
-		'{\\an6\\pos(%d,%d)\\fnGeist Mono\\fs18\\bord0\\shad0\\1c&H%s&}%s',
-		cx + vol_block_w - 10, btn_row_y + btn_h / 2, ink_bgr, vol_pct_text
+		'{\\an5\\pos(%d,%d)\\fnGeist\\fs18\\bord0\\shad0\\1c&H%s&}%s',
+		vol_pct_center_x, btn_row_y + btn_h / 2, ink_bgr, vol_pct_text
 	))
 	local vol_slider_rect = {ax = vs_ax, ay = btn_row_y, bx = vs_bx, by = btn_row_y + btn_h}
 	local vol_block_rect = {ax = vol_block_x, ay = btn_row_y, bx = vol_block_x + vol_block_w, by = btn_row_y + btn_h}
@@ -750,8 +751,8 @@ function Controls:render()
 	))
 	rx = rx - btn_gap
 
-	-- Playlist: Material Icon playlist_play
-	local pl_w = rbtn + 4
+	-- Playlist: Material Icon playlist_play (centered)
+	local pl_w = btn_h
 	rx = rx - pl_w
 	local playlist_rect = {ax = rx, ay = rrow_y, bx = rx + pl_w, by = rrow_y + btn_h}
 	local playlist_hover = get_point_to_rectangle_proximity(cursor, playlist_rect) == 0
@@ -762,7 +763,7 @@ function Controls:render()
 	ass:new_event()
 	ass:append(string.format(
 		'{\\an5\\pos(%d,%d)\\fnMaterialIconsRound-Regular\\fs%d\\bord0\\shad0\\1c&H%s&}playlist_play',
-		rx + pl_w / 2, rrow_y + btn_h / 2, 24, ink_bgr
+		math.floor(rx + pl_w / 2), math.floor(rrow_y + btn_h / 2), 26, ink_bgr
 	))
 
 	-- ==================== 3. INTERACTIVITY ====================
