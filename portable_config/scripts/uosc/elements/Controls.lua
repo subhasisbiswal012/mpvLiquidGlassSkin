@@ -645,26 +645,27 @@ function Controls:render()
 	draw_button(cx, btn_row_y, btn_w, btn_h, 'speed', speed_hover)
 	cx = cx + btn_w + block_gap
 
-	-- Time + percentage in one block.
+	-- Time + percentage in one block (same font for both, clearly readable).
 	local time_str = string.format('%s / %s',
 		_lg_format_time(state.time or 0),
 		_lg_format_time(state.duration or 0))
 	local pct = math.floor(progress * 100)
-	local time_pct_str = string.format('%s  %d%%%%', time_str, pct)
-	local time_block_w = is_narrow and math.max(130, #time_str * 11 + 30) or math.max(200, #time_pct_str * 11 + 20)
+	local time_display = time_str .. '  ' .. pct .. '%'
+	local time_fs = is_narrow and 16 or 20
+	local time_block_w = is_narrow and math.max(140, #time_display * 10 + 20) or math.max(240, #time_display * 12 + 24)
 	draw_glass({ x = cx, y = btn_row_y, w = time_block_w, h = btn_h, r = btn_h / 2, intensity = lg.intensity * 0.9, show_frost = lg.show_frost, shadow_blur = 20 })
 	ass:new_event()
 	ass:append(string.format(
 		'{\\an5\\pos(%d,%d)\\fnGeist Mono\\fs%d\\bord0\\shad0\\1c&H%s&}%s',
 		cx + time_block_w / 2, btn_row_y + btn_h / 2,
-		is_narrow and 16 or 18, ink_bgr, time_pct_str
+		time_fs, ink_bgr, time_display
 	))
 	cx = cx + time_block_w + block_gap
 
 	-- Volume icon + slider + percentage.
 	local vol_slider_w = is_narrow and 80 or 110
-	local vol_pct_w = 44
-	local vol_block_w = btn_w + 6 + vol_slider_w + vol_pct_w
+	local vol_pct_w = 56
+	local vol_block_w = btn_w + 8 + vol_slider_w + vol_pct_w
 	local vol_block_x = cx
 	draw_glass({ x = cx, y = btn_row_y, w = vol_block_w, h = btn_h, r = btn_h / 2, intensity = lg.intensity * 0.9, show_frost = lg.show_frost, shadow_blur = 20 })
 	local vol_icon_rect = {ax = cx, ay = btn_row_y, bx = cx + btn_w, by = btn_row_y + btn_h}
@@ -683,8 +684,8 @@ function Controls:render()
 			ink_bgr, vs * 100, vs * 100, vi_path
 		))
 	end
-	local vs_ax = cx + btn_w + 6
-	local vs_bx = cx + btn_w + 6 + vol_slider_w
+	local vs_ax = cx + btn_w + 8
+	local vs_bx = cx + btn_w + 8 + vol_slider_w
 	local vs_h = 8
 	local vs_y = btn_row_y + (btn_h - vs_h) / 2
 	emit_pill(vs_ax, vs_y, vs_bx, vs_h, 'FFFFFF', '&H80&')
@@ -695,12 +696,12 @@ function Controls:render()
 	if vol_filled_x > vs_ax + vs_h then
 		emit_pill(vs_ax, vs_y, vol_filled_x, vs_h, 'FFFFFF', '&H20&')
 	end
-	-- Volume percentage text (readable size).
-	local vol_pct = math.floor((state.volume or 0) + 0.5)
+	-- Volume percentage text (same style as time text, clearly readable).
+	local vol_pct_text = tostring(math.floor((state.volume or 0) + 0.5)) .. '%'
 	ass:new_event()
 	ass:append(string.format(
-		'{\\an6\\pos(%d,%d)\\fnGeist Mono\\fs16\\b1\\bord0\\shad0\\1c&H%s&}%d%%%%',
-		cx + vol_block_w - 6, btn_row_y + btn_h / 2, ink_bgr, vol_pct
+		'{\\an6\\pos(%d,%d)\\fnGeist Mono\\fs18\\bord0\\shad0\\1c&H%s&}%s',
+		cx + vol_block_w - 10, btn_row_y + btn_h / 2, ink_bgr, vol_pct_text
 	))
 	local vol_slider_rect = {ax = vs_ax, ay = btn_row_y, bx = vs_bx, by = btn_row_y + btn_h}
 	local vol_block_rect = {ax = vol_block_x, ay = btn_row_y, bx = vol_block_x + vol_block_w, by = btn_row_y + btn_h}

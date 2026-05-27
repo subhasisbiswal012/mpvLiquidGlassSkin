@@ -105,11 +105,11 @@ local SEARCH =
 
 local EXPAND_MENU = 'm 5 9 l 12 16 l 19 9'
 
--- Speed: gauge/speedometer (arc with needle).
+-- Speed: gauge/speedometer (centered arc + centered needle).
 local SPEED =
-  'm 3 17 b 3 9 8 4 14 4 b 20 4 24 9 24 17 ' ..
-  'l 21 17 b 21 11 18 7 14 7 b 10 7 6 11 6 17 l 3 17 ' ..
-  'm 13 10 l 15 15 l 13 16 l 11 11 l 13 10'
+  'm 4 18 b 4 10 8 5 12 5 b 16 5 20 10 20 18 ' ..
+  'l 17 18 b 17 12 15 8 12 8 b 9 8 7 12 7 18 l 4 18 ' ..
+  'm 11 11 l 14 16 l 12 17 l 10 12 l 11 11'
 
 local registry = {
   play   = PLAY,
