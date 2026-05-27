@@ -485,7 +485,8 @@ function Controls:render()
 	end
 
 	-- Helper: draw a glass button pebble with an icon centered inside.
-	local function draw_button(bx, by, bw, bh, icon_name, is_hovered)
+	-- icon_scale_factor overrides the default 0.60 when larger icons are needed.
+	local function draw_button(bx, by, bw, bh, icon_name, is_hovered, icon_scale_factor)
 		local br = bh / 2
 		draw_glass({
 			x = bx, y = by, w = bw, h = bh, r = br,
@@ -494,7 +495,7 @@ function Controls:render()
 		})
 		local icon_path = liquid_icons_lib.get(icon_name)
 		if icon_path then
-			local scale = (bh * 0.50) / 24
+			local scale = (bh * (icon_scale_factor or 0.60)) / 24
 			ass:new_event()
 			ass:append(string.format(
 				'{\\an7\\pos(%d,%d)\\bord0\\shad0\\1c&H%s&\\1a&H10&\\fscx%d\\fscy%d\\p1}%s{\\p0}',
@@ -505,6 +506,20 @@ function Controls:render()
 				icon_path
 			))
 		end
+	end
+	-- Helper: draw a glass button with text label instead of an icon.
+	local function draw_text_button(bx, by, bw, bh, label, is_hovered, font_size)
+		draw_glass({
+			x = bx, y = by, w = bw, h = bh, r = bh / 2,
+			intensity = lg.intensity * (is_hovered and 1.2 or 1.0),
+			show_frost = lg.show_frost,
+		})
+		ass:new_event()
+		ass:append(string.format(
+			'{\\an5\\pos(%d,%d)\\fnGeist\\fs%d\\b1\\bord0\\shad0\\1c&H%s&}%s',
+			bx + bw / 2, by + bh / 2,
+			font_size or 13, ink_bgr, label
+		))
 	end
 
 	-- ==================== LAYOUT ====================
@@ -634,26 +649,15 @@ function Controls:render()
 		_lg_format_time(state.time or 0),
 		_lg_format_time(state.duration or 0))
 	local pct = math.floor(progress * 100)
-	local time_block_w = is_narrow and math.max(100, #time_str * 9) or math.max(130, #time_str * 10 + 40)
+	local time_pct_str = string.format('%s  %d%%%%', time_str, pct)
+	local time_block_w = is_narrow and math.max(110, #time_str * 9 + 30) or math.max(160, #time_pct_str * 9 + 16)
 	draw_glass({ x = cx, y = btn_row_y, w = time_block_w, h = btn_h, r = btn_h / 2, intensity = lg.intensity * 0.9, show_frost = lg.show_frost })
-	if is_narrow then
-		ass:new_event()
-		ass:append(string.format(
-			'{\\an5\\pos(%d,%d)\\fnGeist Mono\\fs14\\bord0\\shad0\\1c&H%s&}%s',
-			cx + time_block_w / 2, btn_row_y + btn_h / 2, ink_bgr, time_str
-		))
-	else
-		ass:new_event()
-		ass:append(string.format(
-			'{\\an4\\pos(%d,%d)\\fnGeist Mono\\fs16\\bord0\\shad0\\1c&H%s&}%s',
-			cx + 14, btn_row_y + btn_h / 2, ink_bgr, time_str
-		))
-		ass:new_event()
-		ass:append(string.format(
-			'{\\an6\\pos(%d,%d)\\fnGeist Mono\\fs13\\bord0\\shad0\\1c&H%s&\\1a&H40&}%d%%%%',
-			cx + time_block_w - 12, btn_row_y + btn_h / 2, ink_bgr, pct
-		))
-	end
+	ass:new_event()
+	ass:append(string.format(
+		'{\\an5\\pos(%d,%d)\\fnGeist Mono\\fs%d\\bord0\\shad0\\1c&H%s&}%s',
+		cx + time_block_w / 2, btn_row_y + btn_h / 2,
+		is_narrow and 13 or 15, ink_bgr, time_pct_str
+	))
 	cx = cx + time_block_w + block_gap
 
 	-- Volume icon + slider + percentage.
@@ -690,12 +694,12 @@ function Controls:render()
 	if vol_filled_x > vs_ax + vs_h then
 		emit_pill(vs_ax, vs_y, vol_filled_x, vs_h, 'FFFFFF', '&H20&')
 	end
-	-- Volume percentage text.
+	-- Volume percentage text (readable size).
 	local vol_pct = math.floor((state.volume or 0) + 0.5)
 	ass:new_event()
 	ass:append(string.format(
-		'{\\an6\\pos(%d,%d)\\fnGeist Mono\\fs12\\bord0\\shad0\\1c&H%s&\\1a&H30&}%d%%%%',
-		cx + vol_block_w - 8, btn_row_y + btn_h / 2, ink_bgr, vol_pct
+		'{\\an6\\pos(%d,%d)\\fnGeist Mono\\fs14\\bord0\\shad0\\1c&H%s&}%d%%%%',
+		cx + vol_block_w - 6, btn_row_y + btn_h / 2, ink_bgr, vol_pct
 	))
 	local vol_slider_rect = {ax = vs_ax, ay = btn_row_y, bx = vs_bx, by = btn_row_y + btn_h}
 	local vol_block_rect = {ax = vol_block_x, ay = btn_row_y, bx = vol_block_x + vol_block_w, by = btn_row_y + btn_h}
@@ -704,59 +708,60 @@ function Controls:render()
 	-- Right-side buttons. On narrow screens, use row 2.
 	local rrow_y = is_narrow and (self.by - btn_h - 2) or btn_row_y
 	local rx = area_bx
+	local rbtn = btn_w + 4
 
-	-- Fullscreen
-	rx = rx - btn_w
-	local fs_rect = {ax = rx, ay = rrow_y, bx = rx + btn_w, by = rrow_y + btn_h}
+	-- Fullscreen (bold corners icon, bigger)
+	rx = rx - rbtn
+	local fs_rect = {ax = rx, ay = rrow_y, bx = rx + rbtn, by = rrow_y + btn_h}
 	local fs_hover = get_point_to_rectangle_proximity(cursor, fs_rect) == 0
-	draw_button(rx, rrow_y, btn_w, btn_h, state.fullscreen and 'fullscreen_exit' or 'fullscreen_enter', fs_hover)
+	draw_button(rx, rrow_y, rbtn, btn_h, state.fullscreen and 'fullscreen_exit' or 'fullscreen_enter', fs_hover, 0.70)
 	rx = rx - btn_gap
 
-	-- Settings
-	rx = rx - btn_w
-	local settings_rect = {ax = rx, ay = rrow_y, bx = rx + btn_w, by = rrow_y + btn_h}
+	-- Settings (equalizer icon, bigger)
+	rx = rx - rbtn
+	local settings_rect = {ax = rx, ay = rrow_y, bx = rx + rbtn, by = rrow_y + btn_h}
 	local settings_hover = get_point_to_rectangle_proximity(cursor, settings_rect) == 0
-	draw_button(rx, rrow_y, btn_w, btn_h, 'settings', settings_hover)
+	draw_button(rx, rrow_y, rbtn, btn_h, 'settings', settings_hover, 0.70)
 	rx = rx - btn_gap
 
-	-- Subtitle (CC icon)
-	rx = rx - btn_w
-	local sub_rect = {ax = rx, ay = rrow_y, bx = rx + btn_w, by = rrow_y + btn_h}
+	-- Subtitle: text "CC" button (clear and bold)
+	local cc_w = rbtn + 8
+	rx = rx - cc_w
+	local sub_rect = {ax = rx, ay = rrow_y, bx = rx + cc_w, by = rrow_y + btn_h}
 	local sub_hover = get_point_to_rectangle_proximity(cursor, sub_rect) == 0
-	draw_button(rx, rrow_y, btn_w, btn_h, 'subtitle', sub_hover)
+	draw_text_button(rx, rrow_y, cc_w, btn_h, 'CC', sub_hover, 16)
 	rx = rx - btn_gap
 
-	-- Audio (♫ note)
-	rx = rx - btn_w
-	local audio_rect = {ax = rx, ay = rrow_y, bx = rx + btn_w, by = rrow_y + btn_h}
+	-- Audio (♫ note, bigger icon)
+	rx = rx - rbtn
+	local audio_rect = {ax = rx, ay = rrow_y, bx = rx + rbtn, by = rrow_y + btn_h}
 	local audio_hover = get_point_to_rectangle_proximity(cursor, audio_rect) == 0
-	draw_button(rx, rrow_y, btn_w, btn_h, 'audio_track', audio_hover)
+	draw_button(rx, rrow_y, rbtn, btn_h, 'audio_track', audio_hover, 0.75)
 	rx = rx - btn_gap
 
-	-- Playlist
-	rx = rx - btn_w
-	local playlist_rect = {ax = rx, ay = rrow_y, bx = rx + btn_w, by = rrow_y + btn_h}
+	-- Playlist (list icon, bigger)
+	rx = rx - rbtn
+	local playlist_rect = {ax = rx, ay = rrow_y, bx = rx + rbtn, by = rrow_y + btn_h}
 	local playlist_hover = get_point_to_rectangle_proximity(cursor, playlist_rect) == 0
-	draw_button(rx, rrow_y, btn_w, btn_h, 'playlist', playlist_hover)
-
-	-- Video completion % centered on row (if wide enough).
-	if not is_narrow then
-		local center_x = (cx + rx) / 2
-		if center_x > cx and center_x < rx then
-			ass:new_event()
-			ass:append(string.format(
-				'{\\an5\\pos(%d,%d)\\fnGeist\\fs15\\bord0\\shad0\\1c&H%s&\\1a&H50&}%d%%%% completed',
-				center_x, btn_row_y + btn_h / 2, ink_bgr, pct
-			))
-		end
-	end
+	draw_button(rx, rrow_y, rbtn, btn_h, 'playlist', playlist_hover, 0.70)
 
 	-- ==================== 3. INTERACTIVITY ====================
 	if cursor and cursor.zone then
 		cursor:zone('primary_down', play_rect, function() mp.commandv('cycle', 'pause') end)
 		cursor:zone('primary_down', prev_rect, function() mp.command('playlist-prev') end)
 		cursor:zone('primary_down', next_rect, function() mp.command('playlist-next') end)
-		cursor:zone('primary_down', speed_rect, function() mp.command('script-binding uosc/playback-speed') end)
+		cursor:zone('primary_down', speed_rect, function()
+			local speeds = {0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0}
+			local items = {}
+			for _, s in ipairs(speeds) do
+				local label = (s == 1.0) and 'Normal' or string.format('%.2gx', s)
+				local active = math.abs((state.speed or 1) - s) < 0.01
+				items[#items + 1] = {title = label, value = 'set speed ' .. s, active = active}
+			end
+			mp.commandv('script-message-to', 'uosc', 'open-menu', require('mp.utils').format_json({
+				type = 'lg_speed', title = 'Speed', items = items
+			}))
+		end)
 		cursor:zone('primary_down', vol_icon_rect, function() mp.commandv('cycle', 'mute') end)
 		cursor:zone('primary_down', vol_slider_rect, function()
 			local frac = (cursor.x - vs_ax) / vol_fill_w
@@ -800,7 +805,7 @@ function Controls:render()
 		cursor:zone('primary_down', settings_rect, function() mp.command('script-binding uosc/menu') end)
 		cursor:zone('primary_down', sub_rect, function() mp.command('script-binding uosc/subtitles') end)
 		cursor:zone('primary_down', audio_rect, function() mp.command('script-binding uosc/audio') end)
-		cursor:zone('primary_down', playlist_rect, function() mp.command('script-binding uosc/playlist') end)
+		cursor:zone('primary_down', playlist_rect, function() mp.command('script-binding uosc/items') end)
 	end
 
 	return ass
