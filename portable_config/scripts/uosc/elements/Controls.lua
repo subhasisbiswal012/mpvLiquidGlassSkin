@@ -401,6 +401,102 @@ local function _lg_bgr(rrggbb)
 	return rrggbb:sub(5, 6) .. rrggbb:sub(3, 4) .. rrggbb:sub(1, 2)
 end
 
+-- ===== Speedometer constants & tick sound =====
+-- Speed steps the gauge snaps to. Match the existing speed picker.
+local LG_SPEED_STEPS = {0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0}
+
+-- Sweep: 0.25× sits at the bottom-left, 3.0× at the bottom-right,
+-- 1.625× at the very top. 270° of travel between them.
+local LG_SPEED_ANGLE_START = -135   -- degrees, 0° = pointing UP, clockwise positive
+local LG_SPEED_ANGLE_END   =  135
+local LG_SPEED_ANGLE_SPAN  = LG_SPEED_ANGLE_END - LG_SPEED_ANGLE_START  -- 270
+
+-- Spring physics for the needle. Tune for the bike-cluster feel:
+--   higher stiffness → snappier
+--   higher damping   → less overshoot (2*sqrt(stiffness) = critical)
+-- Defaults: one visible overshoot bob, settles in ~0.6 s. Try
+-- stiffness=110, damping=7 for a sloppier (carnival) feel, or
+-- stiffness=200, damping=22 for an electronic/digital cluster look.
+local LG_SPEED_STIFFNESS = 160
+local LG_SPEED_DAMPING   = 18
+-- Wall-clock duration the OSD stays after the last scroll input.
+local LG_SPEED_OSD_HOLD  = 1.8
+-- A tick flashes gold for this many seconds after the needle crosses it.
+local LG_SPEED_FLASH_DUR = 0.22
+
+-- Subprocess-based audio tick. Plays portable_config/scripts/uosc/
+-- assets/sounds/tick.wav if it exists; silent otherwise. Throttled to
+-- ~80 ms between ticks so rapid scrolls don't pile up subprocesses.
+local _lg_tick_last_play  = 0
+local _lg_tick_path_cached = nil
+local _lg_tick_path_checked = false
+local function _lg_resolve_tick_path()
+	if _lg_tick_path_checked then return _lg_tick_path_cached end
+	_lg_tick_path_checked = true
+	local utils = require('mp.utils')
+	-- Primary: relative to this script's own directory. Most reliable.
+	local candidate
+	if mp.get_script_directory then
+		local script_dir = mp.get_script_directory()
+		if script_dir then
+			candidate = utils.join_path(script_dir, 'assets/sounds/tick.wav')
+		end
+	end
+	-- Fallback: mpv config expansion.
+	if not candidate then
+		local ok, expanded = pcall(mp.command_native,
+			{name = 'expand-path', text = '~~/scripts/uosc/assets/sounds/tick.wav'})
+		if ok then candidate = expanded end
+	end
+	if candidate then
+		local info = utils.file_info(candidate)
+		if info and info.is_file then
+			_lg_tick_path_cached = candidate
+			mp.msg.info('liquid speedo: tick sound resolved at ' .. candidate)
+		else
+			mp.msg.warn('liquid speedo: tick.wav not found at ' .. tostring(candidate))
+		end
+	else
+		mp.msg.warn('liquid speedo: could not resolve assets/sounds/tick.wav path')
+	end
+	return _lg_tick_path_cached
+end
+local function _lg_play_tick_sound()
+	-- Lightweight guard against the same Windows-message scroll firing
+	-- twice in the same animation frame; user-driven scrolls are
+	-- naturally rate-limited so we don't need a longer throttle now
+	-- that this fires once per scroll click instead of per crossing.
+	local now = mp.get_time()
+	if now - _lg_tick_last_play < 0.02 then return end
+	local path = _lg_resolve_tick_path()
+	if not path then return end
+	_lg_tick_last_play = now
+	if state.platform ~= 'windows' then return end
+	-- Escape single quotes inside the PowerShell literal. Backslashes
+	-- inside single-quoted PowerShell strings are kept verbatim, so
+	-- C:\Path\To\tick.wav goes through clean.
+	local safe_path = path:gsub("'", "''")
+	-- PlaySync blocks the subprocess until the WAV is done. The
+	-- subprocess itself is async (mpv doesn't wait), so PlaySync just
+	-- guarantees the player thread doesn't exit before audio finishes.
+	-- Play() (non-sync) sometimes cuts the tail off when PowerShell
+	-- exits immediately on short WAVs.
+	mp.command_native_async({
+		name = 'subprocess',
+		playback_only = false,
+		capture_stdout = false,
+		capture_stderr = false,
+		args = {
+			'powershell', '-NoProfile', '-WindowStyle', 'Hidden', '-Command',
+			string.format("(New-Object Media.SoundPlayer '%s').PlaySync()", safe_path)
+		},
+	}, function(_, result, err)
+		if err then
+			mp.msg.warn('liquid speedo tick subprocess error: ' .. tostring(err))
+		end
+	end)
+end
+
 function Controls:render()
 	local visibility = self:get_visibility()
 	if visibility <= 0 then return end
@@ -415,6 +511,7 @@ function Controls:render()
 	self._lg_play_hover = self._lg_play_hover or 0
 	self._lg_vol_osd_until = self._lg_vol_osd_until or 0
 	self._lg_seek_osd_until = self._lg_seek_osd_until or 0
+	self._lg_speed_osd_until = self._lg_speed_osd_until or 0
 
 	-- Suppress all stock uosc surfaces — we draw everything here.
 	if Elements then
@@ -451,7 +548,8 @@ function Controls:render()
 		end
 	end
 
-	local ink_bgr = _lg_bgr(liquid_theme_lib.current.ink)
+	local ink_rgb = liquid_theme_lib.current.ink
+	local ink_bgr = _lg_bgr(ink_rgb)
 	local accent_bgr = _lg_bgr(liquid_theme_lib.current.accent)
 
 	-- Helper: draw a rounded pill (for progress bar tracks).
@@ -486,42 +584,114 @@ function Controls:render()
 		))
 	end
 
-	-- Helper: draw a glass button pebble with an icon centered inside.
-	-- icon_scale_factor overrides the default 0.60 when larger icons are needed.
-	local function draw_button(bx, by, bw, bh, icon_name, is_hovered, icon_scale_factor)
-		local br = bh / 2
-		draw_glass({
-			x = bx, y = by, w = bw, h = bh, r = br,
-			intensity = lg.intensity * (is_hovered and 1.2 or 1.0),
-			show_frost = lg.show_frost, shadow_blur = 20,
-		})
-		local icon_path = liquid_icons_lib.get(icon_name)
-		if icon_path then
-			local scale = (bh * (icon_scale_factor or 0.60)) / 24
+	-- ===== Hover glow =====
+	-- A subtle warm-gold luminosity painted on the icon (or text) the
+	-- cursor is over. The glass pebble itself does NOT change on hover —
+	-- only its glyph lights up. Knobs:
+	--   LG_GLOW_COLOR     -- one hex RRGGBB used everywhere
+	--   LG_GLOW_BLUR      -- libass \be iterations (1=tight, 10=soft cloud)
+	--   LG_GLOW_ALPHA     -- libass alpha byte. &H00& solid, &HFF& invisible
+	--   LG_ICON_GLOW_BORD -- screen-px thickness of the gold halo around an icon
+	--                        (3 wisp, 5 noticeable, 8 strong)
+	--   LG_TEXT_GLOW_BORD -- thickness of the gold outline around text
+	local LG_GLOW_COLOR      = 'FFD24C'
+	local LG_GLOW_BLUR       = 6
+	local LG_GLOW_ALPHA      = '&H80&'
+	local LG_ICON_GLOW_BORD  = 5
+	local LG_TEXT_GLOW_BORD  = 6
+
+	-- ===== ICON SIZING =====
+	-- LG_ICON_SCALE is the fallback used for any icon that doesn't have
+	-- its own entry in LG_ICON_SCALES below. Each value is a fraction of
+	-- the pebble's height (btn_h, normally 42 px), so 0.46 → ~19 px icon.
+	-- Bump a number to enlarge that one glyph; drop it to shrink it.
+	-- The play/pause pebble uses sh (which scales up on hover) instead of
+	-- btn_h, so its icon still feels alive even with a static fraction.
+	local LG_ICON_SCALE = 0.46
+	local LG_ICON_SCALES = {
+		play              = 0.50,
+		pause             = 0.50,
+		prev              = 0.50,
+		['next']          = 0.50,
+		speed             = 0.55,
+		subtitle          = 0.62,
+		audio_track       = 0.55,
+		info              = 0.55,
+		playlist_play     = 0.55,
+		settings          = 0.60,
+		fullscreen_enter  = 0.55,
+		fullscreen_exit   = 0.55,
+		volume_up         = 0.55,
+		volume_down       = 0.55,
+		volume_mute       = 0.55,
+		volume_off        = 0.55,
+	}
+	local function icon_scale_for(name)
+		return LG_ICON_SCALES[name] or LG_ICON_SCALE
+	end
+
+	-- Paint an SVG icon centred at (cx, cy) at the given pixel size.
+	-- When `is_hovered` is true, draw_glow_at first paints a fat blurred
+	-- gold stroke that hugs the icon's silhouette, then the sharp
+	-- ink-coloured icon is laid on top.
+	local function draw_icon(name, cx, cy, size, is_hovered)
+		if is_hovered then
+			liquid_icons_lib.draw_glow_at(
+				ass, name, cx, cy, size,
+				LG_GLOW_COLOR, LG_GLOW_ALPHA,
+				LG_ICON_GLOW_BORD, LG_GLOW_BLUR
+			)
+		end
+		liquid_icons_lib.draw_at(ass, name, cx, cy, size, ink_rgb, '&H10&')
+	end
+
+	-- Emit a centred text label, optionally glowing on hover. The glow
+	-- is a blurred gold outline (\bord + \3c) rather than a backdrop pill.
+	local function draw_text_label(text, cx, cy, font_size, is_hovered)
+		local x = math.floor(cx + 0.5)
+		local y = math.floor(cy + 0.5)
+		if is_hovered then
 			ass:new_event()
 			ass:append(string.format(
-				'{\\an7\\pos(%d,%d)\\bord0\\shad0\\1c&H%s&\\1a&H10&\\fscx%d\\fscy%d\\p1}%s{\\p0}',
-				bx + (bw - 24 * scale) / 2,
-				by + (bh - 24 * scale) / 2,
-				ink_bgr,
-				scale * 100, scale * 100,
-				icon_path
+				'{\\an5\\pos(%d,%d)\\fnGeist\\fs%d\\b1\\bord%d\\3c&H%s&\\3a%s\\shad0\\be%d\\1c&H%s&\\1a&HFF&}%s',
+				x, y, font_size, LG_TEXT_GLOW_BORD,
+				_lg_bgr(LG_GLOW_COLOR), LG_GLOW_ALPHA, LG_GLOW_BLUR,
+				ink_bgr, text
 			))
 		end
-	end
-	-- Helper: draw a glass button with text label instead of an icon.
-	local function draw_text_button(bx, by, bw, bh, label, is_hovered, font_size)
-		draw_glass({
-			x = bx, y = by, w = bw, h = bh, r = bh / 2,
-			intensity = lg.intensity * (is_hovered and 1.2 or 1.0),
-			show_frost = lg.show_frost, shadow_blur = 20,
-		})
 		ass:new_event()
 		ass:append(string.format(
 			'{\\an5\\pos(%d,%d)\\fnGeist\\fs%d\\b1\\bord0\\shad0\\1c&H%s&}%s',
-			bx + bw / 2, by + bh / 2,
-			font_size or 13, ink_bgr, label
+			x, y, font_size, ink_bgr, text
 		))
+	end
+
+	-- Back-compat shim — callers that already use this name still work.
+	-- When scale_factor is nil the per-icon table picks the size.
+	local function emit_centered_icon(slot_name, bx, by, bw, bh, scale_factor, is_hovered)
+		local size = bh * (scale_factor or icon_scale_for(slot_name))
+		draw_icon(slot_name, bx + bw / 2, by + bh / 2, size, is_hovered or false)
+	end
+
+	-- Glass pebble + centred icon. The pebble itself no longer reacts on
+	-- hover; only the icon brightens.
+	local function draw_button(bx, by, bw, bh, icon_name, is_hovered, icon_scale_factor, _glow_slot)
+		draw_glass({
+			x = bx, y = by, w = bw, h = bh, r = bh / 2,
+			intensity = lg.intensity, show_frost = lg.show_frost, shadow_blur = 20,
+		})
+		local size = bh * (icon_scale_factor or icon_scale_for(icon_name))
+		draw_icon(icon_name, bx + bw / 2, by + bh / 2, size, is_hovered)
+	end
+
+	-- Glass pebble + centred text label. Same hover policy as the icon
+	-- variant: only the text gains a glow, not the pebble.
+	local function draw_text_button(bx, by, bw, bh, label, is_hovered, font_size, _glow_slot)
+		draw_glass({
+			x = bx, y = by, w = bw, h = bh, r = bh / 2,
+			intensity = lg.intensity, show_frost = lg.show_frost, shadow_blur = 20,
+		})
+		draw_text_label(label, bx + bw / 2, by + bh / 2, font_size or 13, is_hovered)
 	end
 
 	-- ==================== LAYOUT ====================
@@ -537,6 +707,45 @@ function Controls:render()
 	local progress_h = 16
 	local row_gap = 10
 
+	-- ===== TIME BLOCK SIZING (#5) =====
+	-- The "1:23 / 4:56   42 %" pill that sits to the right of the quality pill.
+	-- The block is FIXED width (does not grow with text) so it stays put as
+	-- duration ticks across new digits. Bump TIME_BLOCK_FS to make the text
+	-- bigger; bump TIME_BLOCK_W to make the surrounding pebble wider; tweak
+	-- TIME_TEXT_GAP to control the visual spacing between time and "%".
+	local TIME_BLOCK_FS_WIDE   = 28   -- font size on a normal-width player
+	local TIME_BLOCK_FS_NARROW = 18   -- font size on a portrait/vertical player
+	local TIME_BLOCK_W_WIDE    = 250  -- fixed pill width on normal-width player
+	local TIME_BLOCK_W_NARROW  = 200  -- fixed pill width on a narrow player
+	local TIME_TEXT_GAP        = '    ' -- spacing between "X / Y" and "Z %"
+
+	-- ===== QUALITY BLOCK SIZING (#6) =====
+	-- The "HD / 1080p / 4K" pill. Fixed width so the layout doesn't reflow
+	-- when a different resolution shows up.
+	local QUALITY_FS_WIDE      = 24   -- font size on a normal-width player
+	local QUALITY_FS_NARROW    = 18   -- font size on a narrow player
+	local QUALITY_W_WIDE       = 90   -- fixed pill width on normal-width player
+	local QUALITY_W_NARROW     = 64   -- fixed pill width on a narrow player
+
+	-- ===== VOLUME PERCENT SIZING (inside the volume pill) =====
+	local VOL_PCT_FS           = 22   -- was 18 — match the new time/quality scale
+	local VOL_PCT_SLOT_W       = 64   -- horizontal slot reserved for "100 %"
+
+	-- ===== FILENAME LABEL (#4) =====
+	-- Shown left-aligned just above the progress bar while controls are visible.
+	-- FILENAME_FONT must match a font family installed on the system OR a
+	-- font file shipped inside portable_config/fonts/ (mpv auto-loads any
+	-- *.ttf/.otf in that folder). The default 'Bahnschrift' ships with
+	-- Windows 10+ and is condensed/modern — drop a .ttf into the fonts
+	-- folder and update this name to swap in something custom.
+	local FILENAME_FONT        = 'Bahnschrift SemiBold'
+	local FILENAME_FS          = 30   -- font size
+	local FILENAME_GAP         = 6    -- vertical gap above the progress bar
+	local FILENAME_INSET       = 4    -- horizontal inset from the controls area edge
+	local FILENAME_BORD        = 2    -- outline thickness — keeps the title legible
+	                                   -- against bright video in both light/dark themes
+	local FILENAME_SHAD        = 2    -- soft drop shadow under the title
+
 	-- Responsive: detect if too narrow for single row (vertical/portrait video).
 	local is_narrow = area_w < 500
 	local btn_row_y, progress_y
@@ -548,6 +757,36 @@ function Controls:render()
 	else
 		btn_row_y = self.by - btn_h - 4
 		progress_y = btn_row_y - row_gap - progress_h
+	end
+
+	-- ==================== 0. FILENAME LABEL (#4) ====================
+	-- Sits above the progress bar, left-aligned, only while controls are showing.
+	do
+		local fname = mp.get_property('filename', '')
+		if fname and fname ~= '' then
+			-- Rough character-budget so we don't overflow the player width.
+			local avg_char_w = FILENAME_FS * 0.55
+			local max_chars = math.floor((area_w - FILENAME_INSET * 2) / avg_char_w)
+			local display_name = fname
+			if max_chars > 8 and #fname > max_chars then
+				display_name = fname:sub(1, max_chars - 1) .. '…'
+			end
+			-- ASS-escape braces / backslashes that would otherwise be parsed as tags.
+			display_name = display_name:gsub('\\', '\\\\'):gsub('{', '\\{'):gsub('}', '\\}')
+			ass:new_event()
+			ass:append(string.format(
+				'{\\an1\\pos(%d,%d)\\fn%s\\fs%d\\bord%d\\3c&H000000&\\3a&H10&' ..
+				'\\shad%d\\4c&H000000&\\4a&H40&\\1c&H%s&}%s',
+				area_ax + FILENAME_INSET,
+				progress_y - FILENAME_GAP,
+				FILENAME_FONT,
+				FILENAME_FS,
+				FILENAME_BORD,
+				FILENAME_SHAD,
+				ink_bgr,
+				display_name
+			))
+		end
 	end
 
 	-- ==================== 1. PROGRESS BAR (full width, bigger + smoother) ====================
@@ -603,46 +842,34 @@ function Controls:render()
 	local play_scale = 1 + 0.06 * hover_t
 	local sw = btn_w * play_scale
 	local sh = btn_h * play_scale
+	local play_glow_x = cx - (sw - btn_w) / 2
+	local play_glow_y = btn_row_y - (sh - btn_h) / 2
 	draw_glass({
-		x = cx - (sw - btn_w) / 2, y = btn_row_y - (sh - btn_h) / 2, w = sw, h = sh, r = sh / 2,
-		intensity = lg.intensity * (1 + 0.2 * hover_t), show_frost = lg.show_frost, shadow_blur = 20,
+		x = play_glow_x, y = play_glow_y, w = sw, h = sh, r = sh / 2,
+		intensity = lg.intensity, show_frost = lg.show_frost, shadow_blur = 20,
 	})
 	local play_icon = state.pause and 'play' or 'pause'
-	local play_icon_path = liquid_icons_lib.get(play_icon)
-	if play_icon_path then
-		local pscale = (btn_h * 0.60) / 24
-		ass:new_event()
-		ass:append(string.format(
-			'{\\an7\\pos(%d,%d)\\bord0\\shad0\\1c&H%s&\\1a&H0F&\\fscx%d\\fscy%d\\p1}%s{\\p0}',
-			cx + (btn_w - 24 * pscale) / 2, btn_row_y + (btn_h - 24 * pscale) / 2,
-			ink_bgr, pscale * 100, pscale * 100, play_icon_path
-		))
-	end
+	draw_icon(play_icon,
+		play_glow_x + sw / 2, play_glow_y + sh / 2,
+		sh * icon_scale_for(play_icon), is_play_hover)
 	cx = cx + btn_w + block_gap
 
 	-- Prev + Next in one block.
 	local pn_btn = btn_w + 6
 	local pn_block_w = pn_btn * 2 + 2
-	draw_glass({ x = cx, y = btn_row_y, w = pn_block_w, h = btn_h, r = btn_h / 2, intensity = lg.intensity, show_frost = lg.show_frost, shadow_blur = 20 })
 	local prev_rect = {ax = cx, ay = btn_row_y, bx = cx + pn_btn, by = btn_row_y + btn_h}
 	local next_cx = cx + pn_btn + 2
 	local next_rect = {ax = next_cx, ay = btn_row_y, bx = next_cx + pn_btn, by = btn_row_y + btn_h}
-	for _, idef in ipairs({{cx, pn_btn, 'prev'}, {next_cx, pn_btn, 'next'}}) do
-		local icon_path = liquid_icons_lib.get(idef[3])
-		if icon_path then
-			local s = (btn_h * 0.58) / 24
-			ass:new_event()
-			ass:append(string.format(
-				'{\\an7\\pos(%d,%d)\\bord0\\shad0\\1c&H%s&\\1a&H10&\\fscx%d\\fscy%d\\p1}%s{\\p0}',
-				idef[1] + (idef[2] - 24 * s) / 2, btn_row_y + (btn_h - 24 * s) / 2,
-				ink_bgr, s * 100, s * 100, icon_path
-			))
-		end
-	end
+	local prev_hover = get_point_to_rectangle_proximity(cursor, prev_rect) == 0
+	local next_hover = get_point_to_rectangle_proximity(cursor, next_rect) == 0
+	draw_glass({ x = cx, y = btn_row_y, w = pn_block_w, h = btn_h, r = btn_h / 2, intensity = lg.intensity, show_frost = lg.show_frost, shadow_blur = 20 })
+	emit_centered_icon('prev',  cx,       btn_row_y, pn_btn, btn_h, nil, prev_hover)
+	emit_centered_icon('next',  next_cx,  btn_row_y, pn_btn, btn_h, nil, next_hover)
 	cx = cx + pn_block_w + block_gap
 
 	-- Speed button (speedometer icon).
 	local speed_rect = {ax = cx, ay = btn_row_y, bx = cx + btn_w, by = btn_row_y + btn_h}
+	self._lg_speed_rect = speed_rect  -- consumed by lg-scroll-* handlers
 	local speed_hover = get_point_to_rectangle_proximity(cursor, speed_rect) == 0
 	draw_button(cx, btn_row_y, btn_w, btn_h, 'speed', speed_hover)
 	cx = cx + btn_w + btn_gap
@@ -662,52 +889,44 @@ function Controls:render()
 	elseif vid_h >= 144 then quality_label = '144p'
 	elseif vid_h > 0 then quality_label = tostring(vid_h) .. 'p'
 	end
-	local quality_fs = is_narrow and 17 or 20
-	local quality_w = math.max(btn_w + 20, #quality_label * 12 + 24)
+	-- Apply fixed-width / scaled-font sizing from the constants block (#6).
+	local quality_fs = is_narrow and QUALITY_FS_NARROW or QUALITY_FS_WIDE
+	local quality_w  = is_narrow and QUALITY_W_NARROW  or QUALITY_W_WIDE
 	local quality_rect = {ax = cx, ay = btn_row_y, bx = cx + quality_w, by = btn_row_y + btn_h}
 	local quality_hover = get_point_to_rectangle_proximity(cursor, quality_rect) == 0
-	draw_text_button(cx, btn_row_y, quality_w, btn_h, quality_label, quality_hover, quality_fs)
+	draw_text_button(cx, btn_row_y, quality_w, btn_h, quality_label, quality_hover, quality_fs, 'quality')
 	cx = cx + quality_w + block_gap
 
-	-- Time + percentage in one block.
+	-- Time + percentage in one block (#5).
 	local time_str = string.format('%s / %s',
 		_lg_format_time(state.time or 0),
 		_lg_format_time(state.duration or 0))
 	local pct = math.floor(progress * 100)
-	local time_display = time_str .. '   ' .. pct .. ' %'
-	local time_fs = is_narrow and 17 or 22
-	local time_block_w = is_narrow and math.max(150, #time_display * 10 + 20) or math.max(260, #time_display * 13 + 24)
+	local time_display = time_str .. TIME_TEXT_GAP .. pct .. ' %'
+	local time_fs      = is_narrow and TIME_BLOCK_FS_NARROW or TIME_BLOCK_FS_WIDE
+	local time_block_w = is_narrow and TIME_BLOCK_W_NARROW  or TIME_BLOCK_W_WIDE
+	local time_rect    = {ax = cx, ay = btn_row_y, bx = cx + time_block_w, by = btn_row_y + btn_h}
+	local time_hover   = get_point_to_rectangle_proximity(cursor, time_rect) == 0
 	draw_glass({ x = cx, y = btn_row_y, w = time_block_w, h = btn_h, r = btn_h / 2, intensity = lg.intensity * 0.9, show_frost = lg.show_frost, shadow_blur = 20 })
-	ass:new_event()
-	ass:append(string.format(
-		'{\\an5\\pos(%d,%d)\\fnGeist\\fs%d\\bord0\\shad0\\1c&H%s&}%s',
-		cx + time_block_w / 2, btn_row_y + btn_h / 2,
-		time_fs, ink_bgr, time_display
-	))
+	draw_text_label(time_display, cx + time_block_w / 2, btn_row_y + btn_h / 2, time_fs, time_hover)
 	cx = cx + time_block_w + block_gap
 
 	-- Volume icon + slider + percentage.
 	local vol_slider_w = is_narrow and 80 or 110
-	local vol_pct_w = 56
+	local vol_pct_w = VOL_PCT_SLOT_W
 	local vol_block_w = btn_w + 8 + vol_slider_w + vol_pct_w
 	local vol_block_x = cx
+	local vol_block_rect_pre = {ax = cx, ay = btn_row_y, bx = cx + vol_block_w, by = btn_row_y + btn_h}
+	local vol_block_hover = get_point_to_rectangle_proximity(cursor, vol_block_rect_pre) == 0
 	draw_glass({ x = cx, y = btn_row_y, w = vol_block_w, h = btn_h, r = btn_h / 2, intensity = lg.intensity * 0.9, show_frost = lg.show_frost, shadow_blur = 20 })
 	local vol_icon_rect = {ax = cx, ay = btn_row_y, bx = cx + btn_w, by = btn_row_y + btn_h}
+	local vol_icon_hover = get_point_to_rectangle_proximity(cursor, vol_icon_rect) == 0
 	local vol_icon = 'volume_up'
 	if state.mute then vol_icon = 'volume_off'
 	elseif (state.volume or 0) <= 0 then vol_icon = 'volume_mute'
 	elseif (state.volume or 0) <= 60 then vol_icon = 'volume_down'
 	end
-	local vi_path = liquid_icons_lib.get(vol_icon)
-	if vi_path then
-		local vs = (btn_h * 0.55) / 24
-		ass:new_event()
-		ass:append(string.format(
-			'{\\an7\\pos(%d,%d)\\bord0\\shad0\\1c&H%s&\\1a&H10&\\fscx%d\\fscy%d\\p1}%s{\\p0}',
-			cx + (btn_w - 24 * vs) / 2, btn_row_y + (btn_h - 24 * vs) / 2,
-			ink_bgr, vs * 100, vs * 100, vi_path
-		))
-	end
+	emit_centered_icon(vol_icon, cx, btn_row_y, btn_w, btn_h, nil, vol_icon_hover or vol_block_hover)
 	local vs_ax = cx + btn_w + 8
 	local vs_bx = cx + btn_w + 8 + vol_slider_w
 	local vs_h = 8
@@ -723,11 +942,7 @@ function Controls:render()
 	-- Volume percentage text (centered between slider end and block end).
 	local vol_pct_text = tostring(math.floor((state.volume or 0) + 0.5)) .. ' %'
 	local vol_pct_center_x = (vs_bx + cx + vol_block_w) / 2
-	ass:new_event()
-	ass:append(string.format(
-		'{\\an5\\pos(%d,%d)\\fnGeist\\fs18\\bord0\\shad0\\1c&H%s&}%s',
-		vol_pct_center_x, btn_row_y + btn_h / 2, ink_bgr, vol_pct_text
-	))
+	draw_text_label(vol_pct_text, vol_pct_center_x, btn_row_y + btn_h / 2, VOL_PCT_FS, vol_block_hover)
 	local vol_slider_rect = {ax = vs_ax, ay = btn_row_y, bx = vs_bx, by = btn_row_y + btn_h}
 	local vol_block_rect = {ax = vol_block_x, ay = btn_row_y, bx = vol_block_x + vol_block_w, by = btn_row_y + btn_h}
 	self._lg_vol_block_rect = vol_block_rect
@@ -742,54 +957,46 @@ function Controls:render()
 	rx = rx - rbtn
 	local fs_rect = {ax = rx, ay = rrow_y, bx = rx + rbtn, by = rrow_y + btn_h}
 	local fs_hover = get_point_to_rectangle_proximity(cursor, fs_rect) == 0
-	draw_button(rx, rrow_y, rbtn, btn_h, state.fullscreen and 'fullscreen_exit' or 'fullscreen_enter', fs_hover, 0.75)
+	draw_button(rx, rrow_y, rbtn, btn_h, state.fullscreen and 'fullscreen_exit' or 'fullscreen_enter', fs_hover)
 	rx = rx - btn_gap
 
-	-- Settings
+	-- Settings (3-dot menu).
 	rx = rx - rbtn
 	local settings_rect = {ax = rx, ay = rrow_y, bx = rx + rbtn, by = rrow_y + btn_h}
 	local settings_hover = get_point_to_rectangle_proximity(cursor, settings_rect) == 0
-	draw_button(rx, rrow_y, rbtn, btn_h, 'settings', settings_hover, 0.75)
+	draw_button(rx, rrow_y, rbtn, btn_h, 'settings', settings_hover)
 	rx = rx - btn_gap
 
-	-- Subtitle: bold "CC" text
-	local cc_w = rbtn + 12
-	rx = rx - cc_w
-	local sub_rect = {ax = rx, ay = rrow_y, bx = rx + cc_w, by = rrow_y + btn_h}
+	-- Subtitle: render the SVG icon now (was "CC" text).
+	local sub_w = rbtn
+	rx = rx - sub_w
+	local sub_rect = {ax = rx, ay = rrow_y, bx = rx + sub_w, by = rrow_y + btn_h}
 	local sub_hover = get_point_to_rectangle_proximity(cursor, sub_rect) == 0
-	draw_text_button(rx, rrow_y, cc_w, btn_h, 'CC', sub_hover, 20)
+	draw_button(rx, rrow_y, sub_w, btn_h, 'subtitle', sub_hover)
 	rx = rx - btn_gap
 
-	-- Audio: Material Icon headphones (since we have the font now)
-	local audio_w = rbtn + 4
+	-- Audio (musical-track-list svg).
+	local audio_w = rbtn
 	rx = rx - audio_w
 	local audio_rect = {ax = rx, ay = rrow_y, bx = rx + audio_w, by = rrow_y + btn_h}
 	local audio_hover = get_point_to_rectangle_proximity(cursor, audio_rect) == 0
-	draw_glass({
-		x = rx, y = rrow_y, w = audio_w, h = btn_h, r = btn_h / 2,
-		intensity = lg.intensity * (audio_hover and 1.2 or 1.0), show_frost = lg.show_frost, shadow_blur = 20,
-	})
-	ass:new_event()
-	ass:append(string.format(
-		'{\\an5\\pos(%d,%d)\\fnMaterialIconsRound-Regular\\fs%d\\bord0\\shad0\\1c&H%s&}headphones',
-		math.floor(rx + audio_w / 2), math.floor(rrow_y + btn_h / 2 + 1), 24, ink_bgr
-	))
+	draw_button(rx, rrow_y, audio_w, btn_h, 'audio_track', audio_hover)
 	rx = rx - btn_gap
 
-	-- Playlist: Material Icon playlist_play (centered)
+	-- Info: opens mpv stats overlay (#3). Sits between audio and playlist.
+	local info_w = btn_h
+	rx = rx - info_w
+	local info_rect = {ax = rx, ay = rrow_y, bx = rx + info_w, by = rrow_y + btn_h}
+	local info_hover = get_point_to_rectangle_proximity(cursor, info_rect) == 0
+	draw_button(rx, rrow_y, info_w, btn_h, 'info', info_hover)
+	rx = rx - btn_gap
+
+	-- Playlist (with play marker).
 	local pl_w = btn_h
 	rx = rx - pl_w
 	local playlist_rect = {ax = rx, ay = rrow_y, bx = rx + pl_w, by = rrow_y + btn_h}
 	local playlist_hover = get_point_to_rectangle_proximity(cursor, playlist_rect) == 0
-	draw_glass({
-		x = rx, y = rrow_y, w = pl_w, h = btn_h, r = btn_h / 2,
-		intensity = lg.intensity * (playlist_hover and 1.2 or 1.0), show_frost = lg.show_frost, shadow_blur = 20,
-	})
-	ass:new_event()
-	ass:append(string.format(
-		'{\\an5\\pos(%d,%d)\\fnMaterialIconsRound-Regular\\fs%d\\bord0\\shad0\\1c&H%s&}playlist_play',
-		math.floor(rx + pl_w / 2), math.floor(rrow_y + btn_h / 2 + 1), 26, ink_bgr
-	))
+	draw_button(rx, rrow_y, pl_w, btn_h, 'playlist_play', playlist_hover)
 
 	-- ==================== 3. INTERACTIVITY ====================
 	if cursor and cursor.zone then
@@ -865,6 +1072,10 @@ function Controls:render()
 		cursor:zone('primary_down', settings_rect, function() mp.command('script-binding uosc/menu') end)
 		cursor:zone('primary_down', sub_rect, function() mp.command('script-binding uosc/subtitles') end)
 		cursor:zone('primary_down', audio_rect, function() mp.command('script-binding uosc/audio') end)
+		cursor:zone('primary_down', info_rect, function()
+			-- Toggle mpv's built-in stats overlay; gives codec/fps/bitrate/etc.
+			mp.command('script-binding stats/display-stats-toggle')
+		end)
 		cursor:zone('primary_down', playlist_rect, function() mp.command('script-binding uosc/items') end)
 	end
 
@@ -874,9 +1085,11 @@ function Controls:render()
 	local win_cx = display.width / 2
 	local win_cy = display.height / 2
 
-	-- Only one OSD at a time: volume takes priority if both are active.
-	local show_vol_osd = now < self._lg_vol_osd_until
-	local show_seek_osd = (not show_vol_osd) and now < self._lg_seek_osd_until
+	-- Only one OSD at a time: volume > speed > seek priority.
+	local show_vol_osd   = now < (self._lg_vol_osd_until or 0)
+	local show_speed_osd = (not show_vol_osd) and now < (self._lg_speed_osd_until or 0)
+	local show_seek_osd  = (not show_vol_osd) and (not show_speed_osd)
+	                       and now < (self._lg_seek_osd_until or 0)
 
 	if show_vol_osd then
 		local osd_w, osd_h = 220, 180
@@ -886,17 +1099,13 @@ function Controls:render()
 			x = osd_x, y = osd_y, w = osd_w, h = osd_h, r = 28,
 			intensity = lg.intensity * 1.8, show_frost = lg.show_frost, shadow_blur = 40,
 		})
-		-- Big speaker icon
+		-- Big speaker icon — same SVG family as the volume-bar control.
 		local vol_icon_name = 'volume_up'
 		if state.mute then vol_icon_name = 'volume_off'
 		elseif (state.volume or 0) <= 0 then vol_icon_name = 'volume_mute'
 		elseif (state.volume or 0) <= 60 then vol_icon_name = 'volume_down'
 		end
-		ass:new_event()
-		ass:append(string.format(
-			'{\\an5\\pos(%d,%d)\\fnMaterialIconsRound-Regular\\fs90\\bord0\\shad0\\1c&H%s&}%s',
-			win_cx, win_cy - 18, ink_bgr, vol_icon_name
-		))
+		liquid_icons_lib.draw_at(ass, vol_icon_name, win_cx, win_cy - 18, 90, ink_rgb, '&H10&')
 		-- Volume percentage below
 		local vol_text = tostring(math.floor((state.volume or 0) + 0.5)) .. ' %'
 		ass:new_event()
@@ -907,6 +1116,208 @@ function Controls:render()
 		if now < self._lg_vol_osd_until - 0.05 then request_render() end
 	end
 
+	if show_speed_osd then
+		-- ---------- Speedometer OSD ----------
+		-- Tunables — bump radii up if you grow OSD_SIZE.
+		local OSD_SIZE       = 400          -- glass block size (square)
+		local R_RIM          = 162          -- thin decorative outer ring
+		local R_PROGRESS     = 156          -- accent-coloured fill arc
+		local R_OUT          = 150          -- outer end of tick marks
+		local R_MAJOR_IN     = 126          -- inner end of major ticks (24 px)
+		local R_MINOR_IN     = 138          -- inner end of minor ticks (12 px)
+		local R_LABEL        = 102          -- numeric labels radius
+		local NEEDLE_LEN     = 128
+		local NEEDLE_BACK    = 14
+		local HUB_R          = 11
+		local LABEL_FS       = 24           -- WAS 14 — much bigger now
+		local VALUE_FS       = 48           -- the big centred speed text
+		local SUBTITLE_FS    = 15
+		local RIM_BORD       = 1.8          -- outer ring stroke thickness
+		local PROGRESS_BORD  = 5            -- fill-arc stroke thickness
+
+		local osd_x = win_cx - OSD_SIZE / 2
+		local osd_y = win_cy - OSD_SIZE / 2
+		draw_glass({
+			x = osd_x, y = osd_y, w = OSD_SIZE, h = OSD_SIZE, r = 36,
+			intensity = lg.intensity * 1.8, show_frost = lg.show_frost, shadow_blur = 40,
+		})
+
+		-- Helper: emit an arc as a stroked polyline (\bord gives thickness).
+		local function emit_arc(radius, start_deg, end_deg, color_rgb, alpha_byte, bord)
+			local span = math.abs(end_deg - start_deg)
+			local samples = math.max(8, math.ceil(span / 4))
+			local parts = {}
+			for i = 0, samples do
+				local a = start_deg + (end_deg - start_deg) * (i / samples)
+				local theta = math.rad(a - 90)
+				local x = win_cx + math.cos(theta) * radius
+				local y = win_cy + math.sin(theta) * radius
+				parts[#parts + 1] = string.format('%s %.1f %.1f',
+					i == 0 and 'm' or 'l', x, y)
+			end
+			ass:new_event()
+			ass:append(string.format(
+				'{\\an7\\pos(0,0)\\bord%.2f\\shad0\\1a&HFF&\\3c&H%s&\\3a%s\\p1}%s{\\p0}',
+				bord, _lg_bgr(color_rgb), alpha_byte, table.concat(parts, ' ')
+			))
+		end
+
+		-- ---- Spring physics for the needle ----
+		local cur_speed = state.speed or 1.0
+		-- Nearest step → target angle.
+		local nearest_idx = 1
+		local nearest_diff = math.huge
+		for i, s in ipairs(LG_SPEED_STEPS) do
+			local d = math.abs(s - cur_speed)
+			if d < nearest_diff then nearest_diff = d; nearest_idx = i end
+		end
+		local function angle_for_index(i)
+			return LG_SPEED_ANGLE_START + (i - 1) * (LG_SPEED_ANGLE_SPAN / (#LG_SPEED_STEPS - 1))
+		end
+		local target_angle = angle_for_index(nearest_idx)
+
+		self._lg_speed_current_angle = self._lg_speed_current_angle or target_angle
+		self._lg_speed_velocity      = self._lg_speed_velocity or 0
+		self._lg_speed_last_t        = self._lg_speed_last_t or now
+
+		local dt = math.min(0.05, now - self._lg_speed_last_t)
+		self._lg_speed_last_t = now
+		local prev_angle = self._lg_speed_current_angle
+		local v = self._lg_speed_velocity
+		-- Semi-implicit Euler spring step.
+		v = v + (target_angle - prev_angle) * LG_SPEED_STIFFNESS * dt
+		v = v - v * LG_SPEED_DAMPING * dt
+		self._lg_speed_current_angle = prev_angle + v * dt
+		self._lg_speed_velocity = v
+
+		-- ---- Tick-crossing detection (visual gold flash only) ----
+		-- Audio ticks are fired by the scroll handler so the user hears
+		-- exactly one tick per scroll click. The visual flash still
+		-- responds to every needle pass — it's part of the physics feel.
+		self._lg_speed_tick_flash = self._lg_speed_tick_flash or {}
+		do
+			local lo = math.min(prev_angle, self._lg_speed_current_angle)
+			local hi = math.max(prev_angle, self._lg_speed_current_angle)
+			for i = 1, #LG_SPEED_STEPS do
+				local ta = angle_for_index(i)
+				if lo < ta and ta <= hi then
+					self._lg_speed_tick_flash[i] = now
+				end
+			end
+		end
+
+		local current_angle = self._lg_speed_current_angle
+
+		-- ---- Outer decorative rim (faint full sweep) ----
+		emit_arc(R_RIM, LG_SPEED_ANGLE_START, LG_SPEED_ANGLE_END,
+			ink_rgb, '&H90&', RIM_BORD)
+
+		-- ---- Scale ticks + labels ----
+		for i, s in ipairs(LG_SPEED_STEPS) do
+			local a = angle_for_index(i)
+			local theta = math.rad(a - 90)  -- 0° up → math 0° right
+			local cos_t, sin_t = math.cos(theta), math.sin(theta)
+			local x1, y1 = win_cx + cos_t * R_OUT, win_cy + sin_t * R_OUT
+			-- Major step (whole numbers) vs minor (the 0.25/0.5/0.75 fractions).
+			local is_major = (math.abs(s - math.floor(s + 0.5)) < 0.01)
+			local r_in = is_major and R_MAJOR_IN or R_MINOR_IN
+			local x2, y2 = win_cx + cos_t * r_in, win_cy + sin_t * r_in
+			-- Flash colour if recently crossed.
+			local flash_t = self._lg_speed_tick_flash[i]
+			local is_flashing = flash_t and (now - flash_t) < LG_SPEED_FLASH_DUR
+			local tick_color = is_flashing and LG_GLOW_COLOR or ink_rgb
+			local tick_alpha = is_major and '&H00&' or '&H50&'
+			if is_flashing then tick_alpha = '&H00&' end
+			local tick_w = is_major and 3.5 or 2
+			-- Emit as a thin rectangle along the radial direction.
+			local px, py = -sin_t, cos_t
+			local hw = tick_w / 2
+			ass:new_event()
+			ass:append(string.format(
+				'{\\an7\\pos(0,0)\\bord0\\shad0\\1c&H%s&\\1a%s\\p1}m %.1f %.1f l %.1f %.1f l %.1f %.1f l %.1f %.1f{\\p0}',
+				_lg_bgr(tick_color), tick_alpha,
+				x1 + px * hw, y1 + py * hw,
+				x2 + px * hw, y2 + py * hw,
+				x2 - px * hw, y2 - py * hw,
+				x1 - px * hw, y1 - py * hw
+			))
+			-- Numeric label for major ticks only (keeps the dial clean).
+			if is_major then
+				local lx, ly = win_cx + cos_t * R_LABEL, win_cy + sin_t * R_LABEL
+				local label = string.format('%.2g', s)
+				-- The label "flashes" too — same gold pulse when its tick crosses.
+				local label_color = is_flashing and LG_GLOW_COLOR or ink_rgb
+				ass:new_event()
+				ass:append(string.format(
+					'{\\an5\\pos(%d,%d)\\fnGeist\\fs%d\\b1\\bord2\\3c&H000000&\\3a&H50&\\shad0\\1c&H%s&}%s',
+					math.floor(lx + 0.5), math.floor(ly + 0.5),
+					LABEL_FS, _lg_bgr(label_color), label
+				))
+			end
+		end
+
+		-- ---- Needle (rotated trapezoid) ----
+		do
+			local theta = math.rad(current_angle - 90)
+			local nx, ny = math.cos(theta), math.sin(theta)
+			local px, py = -ny, nx
+			local base_w = 5
+			local tip_w  = 1.2
+			local bx1 = win_cx + px * base_w / 2 + nx * (-NEEDLE_BACK)
+			local by1 = win_cy + py * base_w / 2 + ny * (-NEEDLE_BACK)
+			local bx2 = win_cx - px * base_w / 2 + nx * (-NEEDLE_BACK)
+			local by2 = win_cy - py * base_w / 2 + ny * (-NEEDLE_BACK)
+			local tx1 = win_cx + px * tip_w / 2 + nx * NEEDLE_LEN
+			local ty1 = win_cy + py * tip_w / 2 + ny * NEEDLE_LEN
+			local tx2 = win_cx - px * tip_w / 2 + nx * NEEDLE_LEN
+			local ty2 = win_cy - py * tip_w / 2 + ny * NEEDLE_LEN
+			ass:new_event()
+			ass:append(string.format(
+				'{\\an7\\pos(0,0)\\bord0\\shad0\\1c&H%s&\\1a&H00&\\p1}m %.1f %.1f l %.1f %.1f l %.1f %.1f l %.1f %.1f{\\p0}',
+				accent_bgr,
+				bx1, by1, tx1, ty1, tx2, ty2, bx2, by2
+			))
+		end
+
+		-- ---- Centre hub (filled accent disc + thin ink ring) ----
+		do
+			local n = 18
+			local parts = {}
+			for k = 0, n - 1 do
+				local a = (k / n) * 2 * math.pi
+				local x = win_cx + math.cos(a) * HUB_R
+				local y = win_cy + math.sin(a) * HUB_R
+				parts[#parts + 1] = string.format('%s %.1f %.1f', k == 0 and 'm' or 'l', x, y)
+			end
+			ass:new_event()
+			ass:append(string.format(
+				'{\\an7\\pos(0,0)\\bord1.5\\shad0\\3c&H%s&\\3a&H00&\\1c&H%s&\\1a&H00&\\p1}%s{\\p0}',
+				ink_bgr, accent_bgr, table.concat(parts, ' ')
+			))
+		end
+
+		-- ---- Big value text below centre ----
+		local val_text = string.format('%.2g×', cur_speed)
+		ass:new_event()
+		ass:append(string.format(
+			'{\\an5\\pos(%d,%d)\\fnGeist\\fs%d\\b1\\bord2\\3c&H000000&\\3a&H40&\\shad0\\1c&H%s&}%s',
+			win_cx, win_cy + 90, VALUE_FS, ink_bgr, val_text
+		))
+		-- Subtitle "PLAYBACK SPEED" below the value, lighter weight.
+		ass:new_event()
+		ass:append(string.format(
+			'{\\an5\\pos(%d,%d)\\fnGeist\\fs%d\\b1\\bord0\\shad0\\1c&H%s&\\1a&H60&}PLAYBACK SPEED',
+			win_cx, win_cy + 126, SUBTITLE_FS, ink_bgr
+		))
+
+		-- Keep rendering until the needle settles AND the OSD timeout has passed.
+		local needs_anim = math.abs(target_angle - self._lg_speed_current_angle) > 0.05
+		                 or math.abs(self._lg_speed_velocity) > 0.5
+		if needs_anim or now < self._lg_speed_osd_until - 0.05 then
+			request_render()
+		end
+	end
+
 	if show_seek_osd then
 		local osd_w, osd_h = 220, 180
 		local osd_x = win_cx - osd_w / 2
@@ -915,12 +1326,8 @@ function Controls:render()
 			x = osd_x, y = osd_y, w = osd_w, h = osd_h, r = 28,
 			intensity = lg.intensity * 1.8, show_frost = lg.show_frost, shadow_blur = 40,
 		})
-		-- Big video camera icon (larger to fill the block better)
-		ass:new_event()
-		ass:append(string.format(
-			'{\\an5\\pos(%d,%d)\\fnMaterialIconsRound-Regular\\fs90\\bord0\\shad0\\1c&H%s&}videocam',
-			win_cx, win_cy - 18, ink_bgr
-		))
+		-- Big video camera icon (user-provided SVG).
+		liquid_icons_lib.draw_at(ass, 'video_camera', win_cx, win_cy - 18, 90, ink_rgb, '&H10&')
 		-- Progress percentage below
 		local seek_pct = (state.duration and state.duration > 0)
 			and math.floor(((state.time or 0) / state.duration) * 100) or 0
@@ -953,13 +1360,60 @@ end
 -- Global scroll handler: input.conf routes WHEEL_UP/DOWN here.
 -- If cursor is over the volume block, adjust volume + show volume OSD.
 -- Otherwise, seek + show seek OSD.
+-- Cursor-over-rect helper (the controls patch uses several of these).
+local function _lg_cursor_in_rect(rect)
+	return rect and cursor
+		and cursor.x >= rect.ax and cursor.x <= rect.bx
+		and cursor.y >= rect.ay and cursor.y <= rect.by
+end
+
+-- Step the speed by +/- 1 entry in LG_SPEED_STEPS, snapping to the
+-- nearest existing step first if the current value is off-grid.
+-- Returns the index of the previously-snapped speed (so the caller can
+-- seed the needle's starting angle for the spring animation).
+local function _lg_step_speed(direction)
+	local cur = state.speed or 1.0
+	local nearest_i, nearest_d = 1, math.huge
+	for i, s in ipairs(LG_SPEED_STEPS) do
+		local d = math.abs(s - cur)
+		if d < nearest_d then nearest_d = d; nearest_i = i end
+	end
+	-- If we're sitting cleanly on a step, move by `direction`; otherwise
+	-- the snap itself already moved us in the direction the user wants
+	-- (e.g. 1.07× with +1 → snap to 1.0× then bump to 1.25×).
+	local prev_i = nearest_i
+	local target_i = nearest_i
+	if nearest_d < 0.01 then target_i = nearest_i + direction
+	elseif direction > 0 and LG_SPEED_STEPS[nearest_i] < cur then target_i = nearest_i + 1
+	elseif direction < 0 and LG_SPEED_STEPS[nearest_i] > cur then target_i = nearest_i - 1
+	end
+	target_i = math.max(1, math.min(#LG_SPEED_STEPS, target_i))
+	mp.commandv('no-osd', 'set', 'speed', LG_SPEED_STEPS[target_i])
+	return prev_i
+end
+
+-- Seed the needle's current angle to the OLD speed step so the spring
+-- has somewhere to swing FROM. No-op on second and later scrolls
+-- because we keep the in-flight angle.
+local function _lg_seed_needle_angle(ctrl, prev_i)
+	if ctrl._lg_speed_current_angle == nil then
+		ctrl._lg_speed_current_angle =
+			LG_SPEED_ANGLE_START + (prev_i - 1) * (LG_SPEED_ANGLE_SPAN / (#LG_SPEED_STEPS - 1))
+		ctrl._lg_speed_velocity = 0
+	end
+end
+
 mp.register_script_message('lg-scroll-up', function()
 	local ctrl = Elements and Elements.controls
 	if not ctrl then mp.commandv('no-osd', 'seek', 5, 'relative+exact'); return end
-	-- Check if cursor is over the volume block area
-	if ctrl._lg_vol_block_rect and cursor and
-	   cursor.x >= ctrl._lg_vol_block_rect.ax and cursor.x <= ctrl._lg_vol_block_rect.bx and
-	   cursor.y >= ctrl._lg_vol_block_rect.ay and cursor.y <= ctrl._lg_vol_block_rect.by then
+	if _lg_cursor_in_rect(ctrl._lg_speed_rect) then
+		local prev_i = _lg_step_speed(1)
+		_lg_seed_needle_angle(ctrl, prev_i)
+		_lg_play_tick_sound()
+		ctrl._lg_speed_osd_until = mp.get_time() + LG_SPEED_OSD_HOLD
+		ctrl._lg_vol_osd_until = 0
+		ctrl._lg_seek_osd_until = 0
+	elseif _lg_cursor_in_rect(ctrl._lg_vol_block_rect) then
 		local new_vol = math.min((state.volume or 0) + 5, state.volume_max or 100)
 		mp.commandv('no-osd', 'set', 'volume', new_vol)
 		ctrl._lg_vol_osd_until = mp.get_time() + 2
@@ -975,9 +1429,14 @@ end)
 mp.register_script_message('lg-scroll-down', function()
 	local ctrl = Elements and Elements.controls
 	if not ctrl then mp.commandv('no-osd', 'seek', -5, 'relative+exact'); return end
-	if ctrl._lg_vol_block_rect and cursor and
-	   cursor.x >= ctrl._lg_vol_block_rect.ax and cursor.x <= ctrl._lg_vol_block_rect.bx and
-	   cursor.y >= ctrl._lg_vol_block_rect.ay and cursor.y <= ctrl._lg_vol_block_rect.by then
+	if _lg_cursor_in_rect(ctrl._lg_speed_rect) then
+		local prev_i = _lg_step_speed(-1)
+		_lg_seed_needle_angle(ctrl, prev_i)
+		_lg_play_tick_sound()
+		ctrl._lg_speed_osd_until = mp.get_time() + LG_SPEED_OSD_HOLD
+		ctrl._lg_vol_osd_until = 0
+		ctrl._lg_seek_osd_until = 0
+	elseif _lg_cursor_in_rect(ctrl._lg_vol_block_rect) then
 		local new_vol = math.max((state.volume or 0) - 5, 0)
 		mp.commandv('no-osd', 'set', 'volume', new_vol)
 		ctrl._lg_vol_osd_until = mp.get_time() + 2

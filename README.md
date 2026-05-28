@@ -4,44 +4,74 @@ A modern, glass-styled skin for [mpv](https://mpv.io/) media player. Built as a 
 
 Pure Lua + ASS rendering. No compiled components, no native code, no build step. Just copy and play.
 
-![Controls and Progress Bar](screenshots/Progress%20Bar%20and%20Other%20Controls%20SS.png)
+## Demo
+
+https://github.com/subhasisbiswal012/mpvLiquidGlassSkin/raw/milestone-3-icons-and-polish/Video/Demo.mp4
+
+If the player above doesn't load in your browser, [download or watch Demo.mp4 directly](Video/Demo.mp4).
+
+![Controls bar with SVG icons and gold hover glow](screenshots/New%20Controller%20Logo.png)
 
 ## Features
 
 ### Glass Controls
 - **Full-width progress bar** with frosted glass effect, chapter markers, and click-to-seek + drag scrubbing
-- **YouTube-style button row**: Play/Pause, Skip Previous/Next, Speed, Quality, Time + Progress %, Volume with horizontal slider + %, and right-side utility buttons
+- **Filename label** above the progress bar — currently-playing media title in **Bahnschrift SemiBold** with a soft dark outline + drop shadow so it stays readable on bright video in both light and dark themes
+- **Fixed-width time block** (`X:XX / Y:YY    Z %`) with a configurable font and padding, so the layout doesn't reflow as digits tick over
+- **Fixed-width quality block** (`HD / 1080p / 4K / …`) — bigger, bolder, clickable to open the codec / fps / bitrate panel
+- **YouTube-style button row**: play/pause, prev/next, speed, quality, time + progress %, volume with horizontal slider + %, info, playlist, audio, subtitle, settings, fullscreen
 - All controls wrapped in frosted glass pebbles with soft drop shadows and blur
 
-### Smart Scroll Behavior
-- **Scroll on volume block** = adjust volume
-- **Scroll anywhere else on video** = seek forward/backward 5 seconds
-- No accidental volume changes while browsing the timeline
+### SVG Icon Pipeline
+Every glyph the player draws is a real `.svg` file under [`assets/icons/`](portable_config/scripts/uosc/assets/icons/). At startup, [`lib/liquid/svg.lua`](portable_config/scripts/uosc/lib/liquid/svg.lua) parses each file into ASS drawing commands and `lib/liquid/svg_loader.lua` registers them into the icon registry.
 
-### macOS-Style Centered OSD
-When you scroll to adjust volume or seek, a large centered glass overlay appears (like macOS volume HUD):
+- **Per-path fill / stroke modes** — stroke icons render with libass `\bord`, fills with `\1c`. Stroke width scales with icon size so a 1.5 px design stays proportional at any pebble.
+- **Full SVG path syntax** — `M L H V C S A Z` plus their lowercase relative variants, smooth-cubic continuation, viewBox normalization (4000 × 4000 illustrations render at the same size as a 24 × 24 icon).
+- **Element support** — `<path>`, `<circle>`, `<line>`, `<rect rx ry>` (rounded corners), `<g opacity>`, `<g transform>` with affine matrix / translate / scale, `<defs>` / `<clipPath>` / `<mask>` correctly skipped instead of rendered as artwork.
+- **Inline CSS** — `style="fill:#XXX;opacity:0.4"` (Adobe Illustrator's export style) reads alongside XML attributes.
+- **Per-shape colours** for multi-colour illustrations (opt-in, used by the idle-screen cat). Monochrome icons stay tinted to the player's ink.
 
-![Volume OSD](screenshots/All%20The%20Controls%20and%20Column%20OSD.png)
+Drop any SVG into `assets/icons/<name>.svg` and the loader picks it up on next launch. The inline ASS paths in [`lib/liquid/icons.lua`](portable_config/scripts/uosc/lib/liquid/icons.lua) stay as fallbacks if the asset folder is missing.
 
-- **Volume OSD**: Big speaker icon + volume percentage, centered on screen
-- **Seek OSD**: Video camera icon + progress percentage, centered on screen
-- Only one OSD shows at a time, auto-hides after 2 seconds
+![Volume OSD with gold glow on the icon](screenshots/new%20Volume%20Logo%20Glow%20effects.png)
 
-### Playback Controls
-- **Speed button**: Click to choose playback speed (0.25x to 3x)
-- **Quality indicator**: Shows current video resolution (1080p, 720p, 4K, etc.). For streaming URLs, click to switch quality.
-- **Playlist button**: Opens the playlist picker
-- **Audio track button**: Switch between audio tracks
-- **Subtitle (CC) button**: Load or switch subtitles
-- **Settings button**: Opens the full settings menu (chapters, navigation, utilities, etc.)
-- **Fullscreen button**: Toggle fullscreen
+### Hover Glow
+A subtle warm-gold luminosity bleeds outward from whichever icon or text label the cursor is over. The glass pebble itself stays still — only the glyph lights up. Single colour, single thickness, one knob for the whole player.
 
-![All Controls](screenshots/All%20The%20Controls%20With%20Video%20OSD%20Visual.png)
+- Stroked icons get a fat blurred halo around the silhouette (`\bord` + `\be`)
+- Text labels get a blurred outline (`\bord` + `\3c` + `\be`)
+- All driven by `icons.draw_glow_at()` so any icon you swap in inherits it for free
 
-### Motion & Animation
-- **Spring hover-scale** on the Play button (soft overshoot on hover)
-- **Spring-eased fade** on the top bar visibility
-- `reduced_motion` option for users who prefer no animation
+### Smart Scroll Behaviour
+- **Scroll on the speed pebble** = elastic speedometer (see below)
+- **Scroll on the volume block** = adjust volume + Volume OSD
+- **Scroll anywhere else on the video** = seek ±5 s + Seek OSD
+
+### Centered OSDs (macOS style)
+When you scroll, a large centred glass overlay appears (like macOS's volume HUD):
+
+- **Volume OSD** — Big speaker SVG + percentage, centred on screen. Same SVG as the volume-bar control, just bigger.
+- **Seek OSD** — Video-camera SVG + progress %. The white background that ships with SVGRepo's `clipPath` is stripped at parse time.
+- **Speedometer OSD** — see below.
+
+![Seek OSD with the video camera SVG](screenshots/New%20Video%20Camera%20Logo.png)
+
+### Elastic Speedometer
+Scroll the wheel over the speed pebble and a big circular gauge pops up in the centre of the player. The needle springs to the new speed like a bike cluster — overshoots once, settles in ~0.6 s.
+
+- **Semi-implicit Euler spring** with tunable stiffness / damping. Default 160 / 18 gives one visible overshoot bob.
+- **Tick flash** — each tick mark briefly pulses gold (and the label flashes too) as the needle sweeps past it.
+- **Optional tick sound** — drop a `tick.wav` into [`assets/sounds/`](portable_config/scripts/uosc/assets/sounds/) and a short PowerShell `Media.SoundPlayer` subprocess plays it on each scroll click (Windows; macOS / Linux fallback is silent).
+- **Speed range** matches the existing speed picker (0.25× → 3.0× in 0.25 steps).
+- OSD auto-hides 1.8 s after the last scroll.
+
+![Speedometer OSD with elastic needle + glow](screenshots/Speed%20Meter%20Glow%20with%20Real%20Meter.png)
+
+### Idle Screen
+With no file loaded, the stock "Drop files or URLs here" indicator is replaced with a **Chill Cat illustration** and a friendlier prompt. Comes with a hand-picked font (Spell of Asia by default) and a fully-tunable layout — see Customise below.
+
+### Info Button
+Between the audio and playlist buttons on the right side. One click toggles mpv's built-in stats overlay (codec, fps, bitrate, dropped frames, …).
 
 ### Theme Support
 - **Dark theme** (default) — glass tinted for dark video backgrounds
@@ -66,17 +96,91 @@ mpv --config-dir=portable_config <your-video-file>
 
 This runs mpv with the skin's config in isolation — your existing mpv setup is untouched.
 
-## Customize
+## Customise
 
+### Theme & Animation
 Edit `script-opts/liquid-glass.conf` in your mpv config directory:
 
 | Option | Values | Default | What it does |
 |---|---|---|---|
-| `liquid_glass_theme` | `dark`, `light` | `dark` | Glass tint and text color |
+| `liquid_glass_theme` | `dark`, `light` | `dark` | Glass tint and text colour |
 | `liquid_glass_intensity` | `0.5` to `1.5` | `1.0` | Multiplier on all glass alpha values |
-| `liquid_glass_accent` | hex color | `E8553A` | Accent color for progress fill |
+| `liquid_glass_accent` | hex colour | `E8553A` | Accent colour (needle, hub, progress fill) |
 | `liquid_glass_show_frost_noise` | `yes`, `no` | `yes` | Toggle the noise texture layer |
 | `reduced_motion` | `yes`, `no` | `no` | Skip spring animations |
+
+### Hover Glow (Controls.lua, ~line 499)
+```lua
+local LG_GLOW_COLOR      = 'FFD24C'   -- hex RRGGBB
+local LG_GLOW_BLUR       = 6          -- libass \be iterations (1 tight … 10 cloud)
+local LG_GLOW_ALPHA      = '&H80&'    -- &H00& solid → &HFF& invisible
+local LG_ICON_GLOW_BORD  = 5          -- icon halo thickness in screen px
+local LG_TEXT_GLOW_BORD  = 6          -- text outline thickness
+```
+
+### Per-Icon Sizes (Controls.lua, ~line 512)
+Each value is a fraction of the pebble's height (default pebble = 42 px). Bump a number to enlarge that one glyph.
+```lua
+local LG_ICON_SCALES = {
+    play = 0.50, pause = 0.50, prev = 0.50, ['next'] = 0.50,
+    speed = 0.55, subtitle = 0.62, audio_track = 0.55,
+    info = 0.55, playlist_play = 0.55, settings = 0.60,
+    fullscreen_enter = 0.55, fullscreen_exit = 0.55,
+    volume_up = 0.55, volume_down = 0.55,
+    volume_mute = 0.55, volume_off = 0.55,
+}
+```
+
+### Time + Quality Block (Controls.lua, ~line 612)
+```lua
+local TIME_BLOCK_FS_WIDE   = 28    -- font size
+local TIME_BLOCK_W_WIDE    = 250   -- fixed pill width
+local TIME_TEXT_GAP        = '    '  -- spacing between "X / Y" and "Z %"
+local QUALITY_FS_WIDE      = 24
+local QUALITY_W_WIDE       = 90
+local VOL_PCT_FS           = 22
+```
+
+### Title Font (Controls.lua, ~line 643)
+```lua
+local FILENAME_FONT = 'Bahnschrift SemiBold'   -- any installed font family
+local FILENAME_FS   = 30
+local FILENAME_BORD = 2   -- outline px
+local FILENAME_SHAD = 2   -- shadow px
+```
+
+### Speedometer (Controls.lua, ~line 415)
+```lua
+local LG_SPEED_STIFFNESS = 160   -- snappier ↑, looser ↓
+local LG_SPEED_DAMPING   = 18    -- less overshoot ↑, more bobs ↓
+local LG_SPEED_OSD_HOLD  = 1.8   -- seconds after last scroll
+local LG_SPEED_FLASH_DUR = 0.22  -- gold tick flash duration
+```
+Try `110 / 7` for a sloppy carnival feel, `200 / 22` for a digital cluster look.
+
+### Idle Screen (lib/utils.lua, ~line 920)
+```lua
+local IDLE_FONT     = 'Spell of Asia'
+local IDLE_TEXT     = "What're ya lookin' at? Drop a file or URL already, will ya?"
+local IDLE_FS       = 56
+local IDLE_CAT_FRAC = 0.36   -- cat height as fraction of display height
+local IDLE_CAT_MAX  = 420    -- pixel ceiling
+local IDLE_TEXT_GAP = 32
+```
+
+### Custom Fonts
+Drop any `.ttf` / `.otf` into [`portable_config/fonts/`](portable_config/fonts/) and mpv auto-loads it on startup. Then put the font's family name into `FILENAME_FONT` / `IDLE_FONT` / the speedo value text.
+
+The repo ships with:
+- **Geist** (Vercel, OFL) — body / time / quality
+- **Bahnschrift SemiBold** (Windows system) — filename label
+- **Spell of Asia** (user-installable) — idle prompt
+
+### Custom Icons
+Drop any 24 × 24 viewBox SVG into `assets/icons/<name>.svg` matching one of the registry names (`play`, `pause`, `next`, `prev`, `speed`, `subtitle`, `audio_track`, `info`, `playlist_play`, `settings`, `fullscreen_enter`, `fullscreen_exit`, `volume_up`, `volume_down`, `volume_mute`, `volume_off`, `video_camera`). The loader replaces the inline ASS path on next launch.
+
+### Tick Sound
+Drop a short `tick.wav` (16-bit PCM, 30–80 ms) into [`assets/sounds/`](portable_config/scripts/uosc/assets/sounds/). The speedometer plays it on each scroll click. Delete the file to disable audio (the gold visual flash still fires).
 
 ### Keyboard Shortcuts
 
@@ -86,12 +190,14 @@ Edit `script-opts/liquid-glass.conf` in your mpv config directory:
 
 ## How It Works
 
-The skin is built on four core libraries under `scripts/uosc/lib/liquid/`:
+The skin is built on five core libraries under `scripts/uosc/lib/liquid/`:
 
 - **glass.lua** — Six-layer rendering primitive (drop shadow, glass body, frost noise, top highlight, rim light, border)
 - **theme.lua** — Dark/light token tables with intensity multiplier
 - **motion.lua** — Spring easing curves (overshoot, settle, liquid fade)
-- **icons.lua** — 24+ hand-crafted ASS vector icons
+- **icons.lua** — Icon registry + `draw_at` / `draw_glow_at` renderers (per-shape stroke/fill, per-shape colour, libass alpha + tag injection)
+- **svg.lua** — SVG → ASS converter (path commands, transforms, viewBox normalization, `<defs>` skipping)
+- **svg_loader.lua** — Walks `assets/icons/` at startup and registers each file into the icon registry
 
 These libraries are consumed by patched uosc element files (`Controls.lua`, `TopBar.lua`, `Timeline.lua`, `Volume.lua`) which replace the stock rendering with glass-styled equivalents.
 
@@ -99,19 +205,20 @@ These libraries are consumed by patched uosc element files (`Controls.lua`, `Top
 
 - **mpv** (any recent version)
 - No additional dependencies for end users
+- For the tick sound on Windows: PowerShell (ships with the OS). macOS / Linux currently silent — patch the `_lg_play_tick_sound` helper in `Controls.lua` with `afplay` / `paplay` if you want audio there.
 
 ### For Development
 
 - Lua 5.1+ and [busted](https://github.com/lunarmodules/busted) for running tests
-- Run `busted` from the project root (29 tests)
+- Run `busted` from the project root
 
 ## Credits
 
 - Built on [uosc](https://github.com/tomasklaen/uosc) by [tomasklaen](https://github.com/tomasklaen) (LGPL-2.1)
 - [Geist](https://vercel.com/font) font by Vercel (OFL)
-- [Material Icons](https://fonts.google.com/icons) by Google (Apache 2.0)
+- Icon set adapted from [SVG Repo](https://www.svgrepo.com/) (CC0)
 - Inspired by Apple's Liquid Glass design language
 
 ## License
 
-MIT (own code). Vendors uosc (LGPL-2.1) and Material Icons (Apache 2.0). See `portable_config/scripts/uosc/LICENSE.LGPL` for uosc attribution.
+MIT (own code). Vendors uosc (LGPL-2.1). See `portable_config/scripts/uosc/LICENSE.LGPL` for uosc attribution.

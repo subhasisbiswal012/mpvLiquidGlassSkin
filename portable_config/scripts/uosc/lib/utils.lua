@@ -917,16 +917,50 @@ function render()
 	-- Actual rendering
 	local ass = assdraw.ass_new()
 
-	-- Idle indicator
+	-- ===== Idle screen (Liquid Glass) =====
+	-- Chill Cat illustration + funny prompt when nothing is loaded.
+	--
+	-- Knobs:
+	--   IDLE_FONT      Font family. Drop a .ttf/.otf into
+	--                  portable_config/fonts/  (mpv auto-loads them at
+	--                  startup) and put the family name here.
+	--   IDLE_TEXT      Prompt below the cat. Change to whatever you want.
+	--   IDLE_FS        Prompt font size, in screen pixels.
+	--   IDLE_CAT_FRAC  Cat height as a fraction of display height (0..1).
+	--                  Lower = smaller cat. Default 0.36.
+	--   IDLE_CAT_MAX   Hard ceiling on the cat's pixel size, so it doesn't
+	--                  explode on a 4K display.
+	--   IDLE_TEXT_GAP  Pixels between the bottom of the cat and the
+	--                  text baseline.
 	if state.is_idle and not Manager.disabled.idle_indicator then
-		local smaller_side = math.min(display.width, display.height)
-		local center_x, center_y, icon_size = display.width / 2, display.height / 2, math.max(smaller_side / 4, 56)
-		ass:icon(center_x, center_y - icon_size / 4, icon_size, 'not_started', {
-			color = fg, opacity = config.opacity.idle_indicator,
-		})
-		ass:txt(center_x, center_y + icon_size / 2, 8, t('Drop files or URLs to play here'), {
-			size = icon_size / 4, color = fg, opacity = config.opacity.idle_indicator,
-		})
+		local IDLE_FONT     = 'Spell of Asia'
+		local IDLE_TEXT     = "What're ya lookin' at? Drop a file or URL already, will ya?"
+		local IDLE_FS       = 56
+		local IDLE_CAT_FRAC = 0.36
+		local IDLE_CAT_MAX  = 420
+		local IDLE_TEXT_GAP = 32
+
+		local icons = require('lib/liquid/icons')
+		local theme = require('lib/liquid/theme')
+		local ink_rgb = theme.current.ink
+		local ink_bgr = ink_rgb:sub(5,6) .. ink_rgb:sub(3,4) .. ink_rgb:sub(1,2)
+
+		local cx = display.width / 2
+		local cy = display.height / 2
+		local cat_size = math.min(display.height * IDLE_CAT_FRAC, IDLE_CAT_MAX)
+		local cat_cy = cy - IDLE_TEXT_GAP / 2 - IDLE_FS / 2
+		-- preserve_colors=true so the cat keeps its palette instead of
+		-- being recoloured to ink.
+		icons.draw_at(ass, 'idle_cat', cx, cat_cy, cat_size, ink_rgb, '&H00&', nil, true)
+
+		local text_y = math.floor(cat_cy + cat_size / 2 + IDLE_TEXT_GAP + 0.5)
+		ass:new_event()
+		ass:append(string.format(
+			'{\\an5\\pos(%d,%d)\\fn%s\\fs%d\\bord2\\3c&H000000&\\3a&H20&' ..
+			'\\shad2\\4c&H000000&\\4a&H40&\\1c&H%s&}%s',
+			math.floor(cx + 0.5), text_y,
+			IDLE_FONT, IDLE_FS, ink_bgr, IDLE_TEXT
+		))
 	end
 
 	-- Audio indicator
