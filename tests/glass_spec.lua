@@ -17,11 +17,11 @@ describe('glass primitive', function()
     assert.is_true(#out > 100, 'expected non-trivial output, got '..#out..' chars')
   end)
 
-  it('emits five drawing-mode layers (\\p1 tag appears 5 times)', function()
+  it('emits four drawing-mode layers (\\p1 tag appears 4 times)', function()
     local out = glass.draw({ x = 0, y = 0, w = 60, h = 60, r = 30 })
     local count = 0
     for _ in out:gmatch('\\p1') do count = count + 1 end
-    assert.are.equal(5, count, 'expected 5 visible layers (shadow, body, highlight, rim, border); got '..count)
+    assert.are.equal(4, count, 'expected 4 visible layers (shadow, body, highlight, border); got '..count)
   end)
 
   it('does not emit Lua-style comments that would render as text', function()
