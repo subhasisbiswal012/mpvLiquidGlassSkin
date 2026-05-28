@@ -503,11 +503,34 @@ function Controls:render()
 	local LG_TEXT_GLOW_BORD  = 2
 
 	-- ===== ICON SIZING =====
-	-- Default scale-factor used by draw_button when the caller does not
-	-- pass an explicit one. The SVGs are designed on a 24x24 grid that
-	-- mostly fills the viewBox, so we shrink to ~45% of the pebble's
-	-- height to keep a healthy ring of glass around the glyph.
-	local LG_ICON_SCALE      = 0.46
+	-- LG_ICON_SCALE is the fallback used for any icon that doesn't have
+	-- its own entry in LG_ICON_SCALES below. Each value is a fraction of
+	-- the pebble's height (btn_h, normally 42 px), so 0.46 → ~19 px icon.
+	-- Bump a number to enlarge that one glyph; drop it to shrink it.
+	-- The play/pause pebble uses sh (which scales up on hover) instead of
+	-- btn_h, so its icon still feels alive even with a static fraction.
+	local LG_ICON_SCALE = 0.46
+	local LG_ICON_SCALES = {
+		play              = 0.50,
+		pause             = 0.50,
+		prev              = 0.50,
+		['next']          = 0.50,
+		speed             = 0.55,
+		subtitle          = 0.62,
+		audio_track       = 0.55,
+		info              = 0.55,
+		playlist_play     = 0.55,
+		settings          = 0.60,
+		fullscreen_enter  = 0.55,
+		fullscreen_exit   = 0.55,
+		volume_up         = 0.55,
+		volume_down       = 0.55,
+		volume_mute       = 0.55,
+		volume_off        = 0.55,
+	}
+	local function icon_scale_for(name)
+		return LG_ICON_SCALES[name] or LG_ICON_SCALE
+	end
 
 	-- Paint an SVG icon centred at (cx, cy) at the given pixel size.
 	-- When `is_hovered` is true, a soft gold copy of the same path is
@@ -545,9 +568,9 @@ function Controls:render()
 	end
 
 	-- Back-compat shim — callers that already use this name still work.
-	-- The "hovered" state is reported separately to opt in to the glow.
+	-- When scale_factor is nil the per-icon table picks the size.
 	local function emit_centered_icon(slot_name, bx, by, bw, bh, scale_factor, is_hovered)
-		local size = bh * (scale_factor or LG_ICON_SCALE)
+		local size = bh * (scale_factor or icon_scale_for(slot_name))
 		draw_icon(slot_name, bx + bw / 2, by + bh / 2, size, is_hovered or false)
 	end
 
@@ -558,7 +581,7 @@ function Controls:render()
 			x = bx, y = by, w = bw, h = bh, r = bh / 2,
 			intensity = lg.intensity, show_frost = lg.show_frost, shadow_blur = 20,
 		})
-		local size = bh * (icon_scale_factor or LG_ICON_SCALE)
+		local size = bh * (icon_scale_factor or icon_scale_for(icon_name))
 		draw_icon(icon_name, bx + bw / 2, by + bh / 2, size, is_hovered)
 	end
 
@@ -716,7 +739,7 @@ function Controls:render()
 	local play_icon = state.pause and 'play' or 'pause'
 	draw_icon(play_icon,
 		play_glow_x + sw / 2, play_glow_y + sh / 2,
-		sh * LG_ICON_SCALE, is_play_hover)
+		sh * icon_scale_for(play_icon), is_play_hover)
 	cx = cx + btn_w + block_gap
 
 	-- Prev + Next in one block.
@@ -728,8 +751,8 @@ function Controls:render()
 	local prev_hover = get_point_to_rectangle_proximity(cursor, prev_rect) == 0
 	local next_hover = get_point_to_rectangle_proximity(cursor, next_rect) == 0
 	draw_glass({ x = cx, y = btn_row_y, w = pn_block_w, h = btn_h, r = btn_h / 2, intensity = lg.intensity, show_frost = lg.show_frost, shadow_blur = 20 })
-	emit_centered_icon('prev',  cx,       btn_row_y, pn_btn, btn_h, LG_ICON_SCALE, prev_hover)
-	emit_centered_icon('next',  next_cx,  btn_row_y, pn_btn, btn_h, LG_ICON_SCALE, next_hover)
+	emit_centered_icon('prev',  cx,       btn_row_y, pn_btn, btn_h, nil, prev_hover)
+	emit_centered_icon('next',  next_cx,  btn_row_y, pn_btn, btn_h, nil, next_hover)
 	cx = cx + pn_block_w + block_gap
 
 	-- Speed button (speedometer icon).
@@ -790,7 +813,7 @@ function Controls:render()
 	elseif (state.volume or 0) <= 0 then vol_icon = 'volume_mute'
 	elseif (state.volume or 0) <= 60 then vol_icon = 'volume_down'
 	end
-	emit_centered_icon(vol_icon, cx, btn_row_y, btn_w, btn_h, LG_ICON_SCALE, vol_icon_hover or vol_block_hover)
+	emit_centered_icon(vol_icon, cx, btn_row_y, btn_w, btn_h, nil, vol_icon_hover or vol_block_hover)
 	local vs_ax = cx + btn_w + 8
 	local vs_bx = cx + btn_w + 8 + vol_slider_w
 	local vs_h = 8
