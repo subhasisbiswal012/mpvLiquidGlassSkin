@@ -29,12 +29,12 @@ function M.load_directory(dir)
       local full_path = utils.join_path(dir, fname)
       local text = read_file(full_path)
       if text then
-        local ass_path = svg.parse(text)
-        if ass_path and #ass_path > 0 then
-          icons.register(stem, ass_path)
+        local shapes = svg.parse(text)
+        if shapes and #shapes > 0 then
+          icons.register(stem, shapes)
           n = n + 1
         else
-          mp.msg.warn('liquid svg: empty or unparseable path in ' .. fname)
+          mp.msg.warn('liquid svg: empty or unparseable shapes in ' .. fname)
         end
       end
     end

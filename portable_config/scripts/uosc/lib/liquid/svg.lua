@@ -1,127 +1,367 @@
--- SVG path → ASS path converter.
+-- SVG → ASS converter for the Liquid Glass icon pipeline.
 --
--- mpv/ASS can't render SVG natively, so we ship icons as SVG files for
--- portability and parse the path-data at startup into ASS drawing
--- commands (m / l / b). The output plugs straight into the same icons
--- registry that holds the inline ASS paths in lib/liquid/icons.lua.
+-- mpv/ASS can't render SVG natively. We ship icons as SVG files for
+-- portability and convert them at startup into a list of "shapes" that
+-- the renderer hands straight to libass:
 --
--- Supported subset (sufficient for icons we author ourselves):
---   M x y        → m x y               (move)
---   L x y        → l x y               (line)
---   C x1 y1 x2 y2 x y  → b x1 y1 x2 y2 x y  (cubic bezier)
---   Z / z        → ignored (filled paths close implicitly in ASS)
---   Implicit repeats after M/L/C are honoured per SVG spec.
+--   shape = {
+--     ass_path     = "m 1 2 l 3 4 ...",  -- ASS drawing command string
+--     mode         = "stroke" | "fill",  -- how the renderer should paint it
+--     stroke_width = 1.5,                 -- only when mode == "stroke"
+--     opacity      = 0.5,                 -- 0..1, multiplied into the icon alpha
+--   }
 --
--- Lowercase relative commands and H/V/A/Q/S/T are NOT supported —
--- icons authored for this skin must use absolute M/L/C/Z only.
+-- Supported SVG features (sufficient for the icons we ship under
+-- assets/icons/ — none of those use anything else):
+--   * <path d="...">   M L H V C Z  +  lowercase relative variants
+--   * <circle cx cy r> approximated with four cubic beziers
+--   * <line x1 y1 x2 y2>  as a stroke segment
+--   * <g opacity="..."> opacity stacks onto contained shapes
+--   * transform="matrix(a b c d e f)" or "translate(tx ty)" on path/circle
+--   * fill / stroke / stroke-width / opacity attributes per element
+--
+-- NOT supported: arcs (A), smooth/quadratic shortcuts (S/T/Q), <polygon>,
+-- <polyline>, <ellipse>, <text>. Authoring rule: icons live on a 24x24
+-- viewBox and use the supported subset only.
 
 local M = {}
 
--- Pull all numeric tokens out of a string. Handles commas, whitespace,
--- and leading minus signs. Decimal numbers only (no scientific notation
--- in our icon files).
+------------------------------------------------------------ helpers --
+
 local function tokenize_numbers(s)
   local nums = {}
+  -- Match floats, allowing leading minus and a single decimal point.
   for n in s:gmatch('-?%d+%.?%d*') do
-    nums[#nums + 1] = n
+    nums[#nums + 1] = tonumber(n)
   end
   return nums
 end
 
--- Walk an SVG path d-string and emit ASS drawing commands.
-function M.path_d_to_ass(d)
+local function fmt(n)
+  -- Trim trailing zeros so ASS drawings stay short.
+  local s = string.format('%.4f', n)
+  s = s:gsub('0+$', ''):gsub('%.$', '')
+  if s == '' or s == '-0' then s = '0' end
+  return s
+end
+
+----------------------------------------------------- attribute reader --
+
+-- Pull a single attribute value out of a tag's attribute string.
+local function attr(tag_inner, name)
+  local v = tag_inner:match(name .. '%s*=%s*"([^"]*)"')
+  if v then return v end
+  return tag_inner:match(name .. "%s*=%s*'([^']*)'")
+end
+
+------------------------------------------------------------ transforms
+
+-- Identity. Affine matrix laid out as {a, b, c, d, e, f} where
+-- (x', y') = (a*x + c*y + e,  b*x + d*y + f).
+local IDENT = {1, 0, 0, 1, 0, 0}
+
+local function mat_mul(A, B)
+  return {
+    A[1]*B[1] + A[3]*B[2],
+    A[2]*B[1] + A[4]*B[2],
+    A[1]*B[3] + A[3]*B[4],
+    A[2]*B[3] + A[4]*B[4],
+    A[1]*B[5] + A[3]*B[6] + A[5],
+    A[2]*B[5] + A[4]*B[6] + A[6],
+  }
+end
+
+local function mat_apply(A, x, y)
+  return A[1]*x + A[3]*y + A[5], A[2]*x + A[4]*y + A[6]
+end
+
+local function parse_transform(transform_str)
+  if not transform_str or transform_str == '' then return IDENT end
+  local m = IDENT
+  for op, args in transform_str:gmatch('(%a+)%s*%(([^%)]*)%)') do
+    local nums = tokenize_numbers(args)
+    local part
+    if op == 'matrix' and #nums >= 6 then
+      part = {nums[1], nums[2], nums[3], nums[4], nums[5], nums[6]}
+    elseif op == 'translate' then
+      part = {1, 0, 0, 1, nums[1] or 0, nums[2] or 0}
+    elseif op == 'scale' then
+      local sx = nums[1] or 1
+      local sy = nums[2] or sx
+      part = {sx, 0, 0, sy, 0, 0}
+    end
+    if part then m = mat_mul(m, part) end
+  end
+  return m
+end
+
+------------------------------------------------------------ d parser --
+
+-- Convert an SVG `d` string into a list of ASS path tokens, applying
+-- `xform` (4x6 affine) to every coordinate. Returns the joined string.
+local function path_d_to_ass(d, xform)
+  if not d or d == '' then return '' end
+  xform = xform or IDENT
   local out = {}
-  -- Split by command letter so we get { letter, "args", letter, "args", ... }.
-  local parts = {}
-  for letter, args in d:gmatch('([MLCZmlcz])([^MLCZmlcz]*)') do
-    parts[#parts + 1] = letter
-    parts[#parts + 1] = args
+  local cx, cy = 0, 0      -- current point
+  local sx, sy = 0, 0      -- last move-to (subpath origin)
+
+  local function emit_move(x, y)
+    local tx, ty = mat_apply(xform, x, y)
+    out[#out + 1] = 'm'
+    out[#out + 1] = fmt(tx)
+    out[#out + 1] = fmt(ty)
+  end
+  local function emit_line(x, y)
+    local tx, ty = mat_apply(xform, x, y)
+    out[#out + 1] = 'l'
+    out[#out + 1] = fmt(tx)
+    out[#out + 1] = fmt(ty)
+  end
+  local function emit_cubic(x1, y1, x2, y2, x, y)
+    local a1, b1 = mat_apply(xform, x1, y1)
+    local a2, b2 = mat_apply(xform, x2, y2)
+    local a3, b3 = mat_apply(xform, x,  y)
+    out[#out + 1] = 'b'
+    out[#out + 1] = fmt(a1); out[#out + 1] = fmt(b1)
+    out[#out + 1] = fmt(a2); out[#out + 1] = fmt(b2)
+    out[#out + 1] = fmt(a3); out[#out + 1] = fmt(b3)
   end
 
-  local i = 1
-  while i <= #parts do
-    local cmd = parts[i]
-    local arg_str = parts[i + 1] or ''
-    local nums = tokenize_numbers(arg_str)
+  -- Split into command + argument-blob pairs.
+  local pairs_list = {}
+  for cmd, args in d:gmatch('([MLHVCZmlhvcz])([^MLHVCZmlhvcz]*)') do
+    pairs_list[#pairs_list + 1] = {cmd, args}
+  end
+
+  for _, pair in ipairs(pairs_list) do
+    local cmd = pair[1]
+    local nums = tokenize_numbers(pair[2])
 
     if cmd == 'M' then
-      -- First pair is M, subsequent implicit pairs are L per spec.
-      local j = 1
-      out[#out + 1] = 'm'
-      out[#out + 1] = nums[j]; out[#out + 1] = nums[j + 1]
-      j = j + 2
-      while j + 1 <= #nums do
-        out[#out + 1] = 'l'
-        out[#out + 1] = nums[j]; out[#out + 1] = nums[j + 1]
-        j = j + 2
+      local i = 1
+      cx, cy = nums[i], nums[i + 1]; i = i + 2
+      sx, sy = cx, cy
+      emit_move(cx, cy)
+      while i + 1 <= #nums do
+        cx, cy = nums[i], nums[i + 1]; i = i + 2
+        emit_line(cx, cy)
+      end
+    elseif cmd == 'm' then
+      local i = 1
+      cx, cy = cx + nums[i], cy + nums[i + 1]; i = i + 2
+      sx, sy = cx, cy
+      emit_move(cx, cy)
+      while i + 1 <= #nums do
+        cx, cy = cx + nums[i], cy + nums[i + 1]; i = i + 2
+        emit_line(cx, cy)
       end
     elseif cmd == 'L' then
-      local j = 1
-      while j + 1 <= #nums do
-        out[#out + 1] = 'l'
-        out[#out + 1] = nums[j]; out[#out + 1] = nums[j + 1]
-        j = j + 2
+      local i = 1
+      while i + 1 <= #nums do
+        cx, cy = nums[i], nums[i + 1]; i = i + 2
+        emit_line(cx, cy)
+      end
+    elseif cmd == 'l' then
+      local i = 1
+      while i + 1 <= #nums do
+        cx, cy = cx + nums[i], cy + nums[i + 1]; i = i + 2
+        emit_line(cx, cy)
+      end
+    elseif cmd == 'H' then
+      for _, n in ipairs(nums) do
+        cx = n
+        emit_line(cx, cy)
+      end
+    elseif cmd == 'h' then
+      for _, n in ipairs(nums) do
+        cx = cx + n
+        emit_line(cx, cy)
+      end
+    elseif cmd == 'V' then
+      for _, n in ipairs(nums) do
+        cy = n
+        emit_line(cx, cy)
+      end
+    elseif cmd == 'v' then
+      for _, n in ipairs(nums) do
+        cy = cy + n
+        emit_line(cx, cy)
       end
     elseif cmd == 'C' then
-      local j = 1
-      while j + 5 <= #nums do
-        out[#out + 1] = 'b'
-        out[#out + 1] = nums[j];     out[#out + 1] = nums[j + 1]
-        out[#out + 1] = nums[j + 2]; out[#out + 1] = nums[j + 3]
-        out[#out + 1] = nums[j + 4]; out[#out + 1] = nums[j + 5]
-        j = j + 6
+      local i = 1
+      while i + 5 <= #nums do
+        local x1, y1 = nums[i],     nums[i + 1]
+        local x2, y2 = nums[i + 2], nums[i + 3]
+        local x,  y  = nums[i + 4], nums[i + 5]
+        emit_cubic(x1, y1, x2, y2, x, y)
+        cx, cy = x, y
+        i = i + 6
       end
-    -- Z / z / unsupported lowercase commands: silently drop.
+    elseif cmd == 'c' then
+      local i = 1
+      while i + 5 <= #nums do
+        local x1, y1 = cx + nums[i],     cy + nums[i + 1]
+        local x2, y2 = cx + nums[i + 2], cy + nums[i + 3]
+        local x,  y  = cx + nums[i + 4], cy + nums[i + 5]
+        emit_cubic(x1, y1, x2, y2, x, y)
+        cx, cy = x, y
+        i = i + 6
+      end
+    elseif cmd == 'Z' or cmd == 'z' then
+      -- Close path: ASS filled drawings close implicitly, but we emit
+      -- a line back to the subpath origin so strokes also close.
+      if cx ~= sx or cy ~= sy then
+        emit_line(sx, sy)
+      end
+      cx, cy = sx, sy
     end
-
-    i = i + 2
   end
 
   return table.concat(out, ' ')
 end
 
--- Parse a full SVG file's text and return the concatenated ASS path
--- string for every <path d="..."> element it contains.
+--------------------------------------------------------- circle helper
+
+-- Approximate a circle with 4 cubic beziers (standard 0.5523 control-
+-- point factor) and emit the resulting ASS path under the given affine.
+local function circle_to_ass(cxv, cyv, r, xform)
+  local k = 0.5523 * r
+  local d =
+    string.format('M%g,%g ', cxv - r, cyv) ..
+    string.format('C%g,%g %g,%g %g,%g ', cxv - r, cyv + k, cxv - k, cyv + r, cxv, cyv + r) ..
+    string.format('C%g,%g %g,%g %g,%g ', cxv + k, cyv + r, cxv + r, cyv + k, cxv + r, cyv) ..
+    string.format('C%g,%g %g,%g %g,%g ', cxv + r, cyv - k, cxv + k, cyv - r, cxv, cyv - r) ..
+    string.format('C%g,%g %g,%g %g,%g',  cxv - k, cyv - r, cxv - r, cyv - k, cxv - r, cyv)
+  return path_d_to_ass(d, xform)
+end
+
+------------------------------------------------------- element parser
+
+-- Decide whether an element's `fill`/`stroke` attributes describe a
+-- fill shape, a stroke shape, or both. Returns a list of shape stubs
+-- (mode + stroke_width) that the caller fills in with the ass_path.
+local function shape_modes(attrs)
+  local fill = attrs.fill
+  local stroke = attrs.stroke
+  local stroke_width = tonumber(attrs.stroke_width) or 1.5
+  local stubs = {}
+
+  -- The svgrepo style sets fill="none" at the <svg> root and applies
+  -- stroke="..." per shape — so a path with no explicit fill, no
+  -- "none", and a stroke, renders strokes only.
+  local has_fill = fill and fill ~= 'none' and fill ~= ''
+  local has_stroke = stroke and stroke ~= 'none' and stroke ~= ''
+
+  -- Fall back: if both are absent treat as fill (matches our authored
+  -- icons that ship with fill="currentColor").
+  if not has_fill and not has_stroke then has_fill = true end
+
+  if has_fill then
+    stubs[#stubs + 1] = {mode = 'fill', stroke_width = 0}
+  end
+  if has_stroke then
+    stubs[#stubs + 1] = {mode = 'stroke', stroke_width = stroke_width}
+  end
+  return stubs
+end
+
+-- Walk the SVG text element-by-element, maintaining a stack of <g>
+-- contexts (opacity, transform).
 function M.parse(svg_text)
-  local pieces = {}
-  for d in svg_text:gmatch('<path[^>]-%sd%s*=%s*"([^"]+)"') do
-    pieces[#pieces + 1] = M.path_d_to_ass(d)
-  end
-  -- Also tolerate single-quoted d attributes.
-  for d in svg_text:gmatch("<path[^>]-%sd%s*=%s*'([^']+)'") do
-    pieces[#pieces + 1] = M.path_d_to_ass(d)
-  end
-  if #pieces == 0 then return nil end
-  return table.concat(pieces, ' ')
-end
+  local shapes = {}
+  local g_stack = {{opacity = 1, transform = IDENT}}
 
--- Convert an ASS drawing string back into SVG path d-data. Used by the
--- one-shot exporter that seeds assets/icons/ from icons.lua. Not called
--- at runtime, but kept here so the round-trip stays in one file.
-function M.ass_to_path_d(ass)
-  local out = {}
-  local tokens = {}
-  for tok in ass:gmatch('%S+') do tokens[#tokens + 1] = tok end
+  -- Strip XML comments to keep regexes simple.
+  svg_text = svg_text:gsub('<!--.-%-%->', '')
+
+  -- Single-pass scanner: find every tag in source order.
   local i = 1
-  while i <= #tokens do
-    local cmd = tokens[i]
-    if cmd == 'm' then
-      out[#out + 1] = string.format('M%s %s', tokens[i + 1], tokens[i + 2])
-      i = i + 3
-    elseif cmd == 'l' then
-      out[#out + 1] = string.format('L%s %s', tokens[i + 1], tokens[i + 2])
-      i = i + 3
-    elseif cmd == 'b' then
-      out[#out + 1] = string.format('C%s %s %s %s %s %s',
-        tokens[i + 1], tokens[i + 2],
-        tokens[i + 3], tokens[i + 4],
-        tokens[i + 5], tokens[i + 6])
-      i = i + 7
+  while true do
+    local s, e, tag = svg_text:find('<(/?)([%w_]+)', i)
+    if not s then break end
+    -- We only care about a handful of tags; skip others by advancing past '>'.
+    local closing = svg_text:sub(s + 1, s + 1) == '/'
+    -- Need to figure out which tag name we matched. Pattern above returned
+    -- '/' or '' in the first capture; redo with proper anchoring.
+    local close_slash, tag_name = svg_text:sub(s + 1):match('^(/?)([%w_]+)')
+    -- Locate the closing '>' of this tag.
+    local gt = svg_text:find('>', s, true)
+    if not gt then break end
+    local tag_body = svg_text:sub(s + 1 + #close_slash + #tag_name, gt - 1)
+
+    if close_slash == '/' then
+      if tag_name == 'g' then
+        if #g_stack > 1 then table.remove(g_stack) end
+      end
+      i = gt + 1
+    elseif tag_name == 'g' then
+      local opacity_str = attr(tag_body, 'opacity')
+      local transform_str = attr(tag_body, 'transform')
+      local op = tonumber(opacity_str) or 1
+      local parent = g_stack[#g_stack]
+      local combined_xform = mat_mul(parent.transform, parse_transform(transform_str))
+      g_stack[#g_stack + 1] = {
+        opacity = (parent.opacity or 1) * op,
+        transform = combined_xform,
+      }
+      i = gt + 1
+    elseif tag_name == 'path' or tag_name == 'circle' or tag_name == 'line' or tag_name == 'rect' then
+      local parent = g_stack[#g_stack]
+      local local_xform = parse_transform(attr(tag_body, 'transform'))
+      local effective = mat_mul(parent.transform, local_xform)
+
+      local self_op = tonumber(attr(tag_body, 'opacity')) or 1
+      local effective_opacity = parent.opacity * self_op
+      local attrs = {
+        fill         = attr(tag_body, 'fill'),
+        stroke       = attr(tag_body, 'stroke'),
+        stroke_width = attr(tag_body, 'stroke%-width'),
+      }
+      local stubs = shape_modes(attrs)
+
+      local ass_path
+      if tag_name == 'path' then
+        local d = attr(tag_body, 'd')
+        ass_path = d and path_d_to_ass(d, effective) or ''
+      elseif tag_name == 'circle' then
+        local cxv = tonumber(attr(tag_body, 'cx')) or 0
+        local cyv = tonumber(attr(tag_body, 'cy')) or 0
+        local rv  = tonumber(attr(tag_body, 'r')) or 0
+        ass_path = circle_to_ass(cxv, cyv, rv, effective)
+      elseif tag_name == 'line' then
+        local x1 = tonumber(attr(tag_body, 'x1')) or 0
+        local y1 = tonumber(attr(tag_body, 'y1')) or 0
+        local x2 = tonumber(attr(tag_body, 'x2')) or 0
+        local y2 = tonumber(attr(tag_body, 'y2')) or 0
+        ass_path = path_d_to_ass(string.format('M%g %g L%g %g', x1, y1, x2, y2), effective)
+      elseif tag_name == 'rect' then
+        local rx = tonumber(attr(tag_body, 'x')) or 0
+        local ry = tonumber(attr(tag_body, 'y')) or 0
+        local rw = tonumber(attr(tag_body, 'width')) or 0
+        local rh = tonumber(attr(tag_body, 'height')) or 0
+        ass_path = path_d_to_ass(
+          string.format('M%g %g L%g %g L%g %g L%g %g Z', rx, ry, rx + rw, ry, rx + rw, ry + rh, rx, ry + rh),
+          effective)
+      end
+
+      if ass_path and #ass_path > 0 then
+        for _, stub in ipairs(stubs) do
+          shapes[#shapes + 1] = {
+            ass_path     = ass_path,
+            mode         = stub.mode,
+            stroke_width = stub.stroke_width,
+            opacity      = effective_opacity,
+          }
+        end
+      end
+      i = gt + 1
     else
-      i = i + 1
+      i = gt + 1
     end
   end
-  return table.concat(out, ' ')
+
+  return shapes
 end
 
 return M

@@ -451,7 +451,8 @@ function Controls:render()
 		end
 	end
 
-	local ink_bgr = _lg_bgr(liquid_theme_lib.current.ink)
+	local ink_rgb = liquid_theme_lib.current.ink
+	local ink_bgr = _lg_bgr(ink_rgb)
 	local accent_bgr = _lg_bgr(liquid_theme_lib.current.accent)
 
 	-- Helper: draw a rounded pill (for progress bar tracks).
@@ -486,27 +487,13 @@ function Controls:render()
 		))
 	end
 
-	-- ===== Hover glow palette =====
-	-- Each control category lights up with its own colour on hover.
-	-- Tweak these to retint the player's personality.
-	local LG_GLOW_COLORS = {
-		play              = '34D399', pause             = '34D399', -- emerald
-		prev              = '60A5FA', ['next']          = '60A5FA', -- sky blue
-		speed             = 'A78BFA',                               -- violet
-		quality           = 'F472B6',                               -- pink
-		volume            = '38BDF8',                               -- cyan blue
-		subtitle          = 'FBBF24',                               -- amber
-		audio             = 'FB923C',                               -- orange
-		fullscreen_enter  = '2DD4BF', fullscreen_exit  = '2DD4BF', -- teal
-		settings          = '94A3B8',                               -- slate
-		info              = '22D3EE',                               -- cyan
-		playlist          = 'C084FC',                               -- purple
-		time              = 'FBBF24',                               -- amber (matches subtitle)
-	}
-	-- How thick the colored halo is around a hovered pebble.
-	local LG_GLOW_PAD = 6   -- extra px on each side
-	local LG_GLOW_BLUR = 6  -- \be iterations for the soft edge
-	local LG_GLOW_ALPHA = '&H50&' -- &H00& = solid, &HFF& = invisible
+	-- ===== Hover glow =====
+	-- One warm shiny-gold halo behind whatever pebble the cursor is over.
+	-- Change LG_GLOW_COLOR to retint the whole player at once.
+	local LG_GLOW_COLOR = 'FFD24C'        -- single hex RRGGBB used for all controls
+	local LG_GLOW_PAD   = 6               -- extra px on each side of the pebble
+	local LG_GLOW_BLUR  = 6               -- \be iterations for the soft edge
+	local LG_GLOW_ALPHA = '&H50&'         -- &H00& = solid, &HFF& = invisible
 
 	-- Helper: rounded pill with box-blur softening, used for the hover halo.
 	local function emit_glow_pill(px1, py, px2, ph, color_bgr, alpha_byte_str, blur_iters)
@@ -540,47 +527,39 @@ function Controls:render()
 		))
 	end
 
-	-- Draw the colored hover halo *behind* a pebble. Pass the slot name from
-	-- LG_GLOW_COLORS (e.g. 'play'). No-op if name unknown or not hovered.
-	local function draw_hover_glow(bx, by, bw, bh, slot, is_hovered)
+	-- Draw the gold hover halo *behind* a pebble. No-op when not hovered.
+	local function draw_hover_glow(bx, by, bw, bh, _slot, is_hovered)
 		if not is_hovered then return end
-		local color = LG_GLOW_COLORS[slot]
-		if not color then return end
 		local gx = bx - LG_GLOW_PAD
 		local gy = by - LG_GLOW_PAD
 		local gw = bw + LG_GLOW_PAD * 2
 		local gh = bh + LG_GLOW_PAD * 2
-		emit_glow_pill(gx, gy, gx + gw, gh, _lg_bgr(color), LG_GLOW_ALPHA, LG_GLOW_BLUR)
+		emit_glow_pill(gx, gy, gx + gw, gh, _lg_bgr(LG_GLOW_COLOR), LG_GLOW_ALPHA, LG_GLOW_BLUR)
+	end
+
+	-- Helper: paint an SVG icon centred inside a rectangle. Hands off
+	-- to lib/liquid/icons.lua which knows the per-shape stroke/fill mode.
+	local function emit_centered_icon(slot_name, bx, by, bw, bh, scale_factor)
+		local size = bh * (scale_factor or 0.58)
+		liquid_icons_lib.draw_at(ass, slot_name, bx + bw / 2, by + bh / 2, size, ink_rgb, '&H10&')
 	end
 
 	-- Helper: draw a glass button pebble with an icon centered inside.
-	-- icon_scale_factor overrides the default 0.60 when larger icons are needed.
-	-- glow_slot (optional) keys into LG_GLOW_COLORS for the hover halo.
-	local function draw_button(bx, by, bw, bh, icon_name, is_hovered, icon_scale_factor, glow_slot)
-		draw_hover_glow(bx, by, bw, bh, glow_slot or icon_name, is_hovered)
+	-- The 4th-arg `glow_slot` is kept for callsite compatibility but is
+	-- unused now that the glow is a single colour.
+	local function draw_button(bx, by, bw, bh, icon_name, is_hovered, icon_scale_factor, _glow_slot)
+		draw_hover_glow(bx, by, bw, bh, nil, is_hovered)
 		local br = bh / 2
 		draw_glass({
 			x = bx, y = by, w = bw, h = bh, r = br,
 			intensity = lg.intensity * (is_hovered and 1.2 or 1.0),
 			show_frost = lg.show_frost, shadow_blur = 20,
 		})
-		local icon_path = liquid_icons_lib.get(icon_name)
-		if icon_path then
-			local scale = (bh * (icon_scale_factor or 0.60)) / 24
-			ass:new_event()
-			ass:append(string.format(
-				'{\\an7\\pos(%d,%d)\\bord0\\shad0\\1c&H%s&\\1a&H10&\\fscx%d\\fscy%d\\p1}%s{\\p0}',
-				bx + (bw - 24 * scale) / 2,
-				by + (bh - 24 * scale) / 2,
-				ink_bgr,
-				scale * 100, scale * 100,
-				icon_path
-			))
-		end
+		emit_centered_icon(icon_name, bx, by, bw, bh, icon_scale_factor or 0.60)
 	end
 	-- Helper: draw a glass button with text label instead of an icon.
-	local function draw_text_button(bx, by, bw, bh, label, is_hovered, font_size, glow_slot)
-		draw_hover_glow(bx, by, bw, bh, glow_slot, is_hovered)
+	local function draw_text_button(bx, by, bw, bh, label, is_hovered, font_size, _glow_slot)
+		draw_hover_glow(bx, by, bw, bh, nil, is_hovered)
 		draw_glass({
 			x = bx, y = by, w = bw, h = bh, r = bh / 2,
 			intensity = lg.intensity * (is_hovered and 1.2 or 1.0),
@@ -615,9 +594,9 @@ function Controls:render()
 	-- TIME_TEXT_GAP to control the visual spacing between time and "%".
 	local TIME_BLOCK_FS_WIDE   = 28   -- font size on a normal-width player
 	local TIME_BLOCK_FS_NARROW = 18   -- font size on a portrait/vertical player
-	local TIME_BLOCK_W_WIDE    = 320  -- fixed pill width on normal-width player
+	local TIME_BLOCK_W_WIDE    = 250  -- fixed pill width on normal-width player
 	local TIME_BLOCK_W_NARROW  = 200  -- fixed pill width on a narrow player
-	local TIME_TEXT_GAP        = '  ' -- spacing between "X / Y" and "Z %"
+	local TIME_TEXT_GAP        = '    ' -- spacing between "X / Y" and "Z %"
 
 	-- ===== QUALITY BLOCK SIZING (#6) =====
 	-- The "HD / 1080p / 4K" pill. Fixed width so the layout doesn't reflow
@@ -633,7 +612,7 @@ function Controls:render()
 
 	-- ===== FILENAME LABEL (#4) =====
 	-- Shown left-aligned just above the progress bar while controls are visible.
-	local FILENAME_FS          = 15   -- font size
+	local FILENAME_FS          = 30   -- font size
 	local FILENAME_GAP         = 6    -- vertical gap above the progress bar
 	local FILENAME_INSET       = 4    -- horizontal inset from the controls area edge
 
@@ -737,16 +716,10 @@ function Controls:render()
 		intensity = lg.intensity * (1 + 0.2 * hover_t), show_frost = lg.show_frost, shadow_blur = 20,
 	})
 	local play_icon = state.pause and 'play' or 'pause'
-	local play_icon_path = liquid_icons_lib.get(play_icon)
-	if play_icon_path then
-		local pscale = (btn_h * 0.60) / 24
-		ass:new_event()
-		ass:append(string.format(
-			'{\\an7\\pos(%d,%d)\\bord0\\shad0\\1c&H%s&\\1a&H0F&\\fscx%d\\fscy%d\\p1}%s{\\p0}',
-			cx + (btn_w - 24 * pscale) / 2, btn_row_y + (btn_h - 24 * pscale) / 2,
-			ink_bgr, pscale * 100, pscale * 100, play_icon_path
-		))
-	end
+	-- Centre the icon in the (possibly scaled) play pebble.
+	liquid_icons_lib.draw_at(ass, play_icon,
+		play_glow_x + sw / 2, play_glow_y + sh / 2,
+		sh * 0.60, ink_rgb, '&H0F&')
 	cx = cx + btn_w + block_gap
 
 	-- Prev + Next in one block.
@@ -762,16 +735,7 @@ function Controls:render()
 	elseif next_hover then draw_hover_glow(next_cx, btn_row_y, pn_btn, btn_h, 'next', true) end
 	draw_glass({ x = cx, y = btn_row_y, w = pn_block_w, h = btn_h, r = btn_h / 2, intensity = lg.intensity * ((prev_hover or next_hover) and 1.15 or 1.0), show_frost = lg.show_frost, shadow_blur = 20 })
 	for _, idef in ipairs({{cx, pn_btn, 'prev'}, {next_cx, pn_btn, 'next'}}) do
-		local icon_path = liquid_icons_lib.get(idef[3])
-		if icon_path then
-			local s = (btn_h * 0.58) / 24
-			ass:new_event()
-			ass:append(string.format(
-				'{\\an7\\pos(%d,%d)\\bord0\\shad0\\1c&H%s&\\1a&H10&\\fscx%d\\fscy%d\\p1}%s{\\p0}',
-				idef[1] + (idef[2] - 24 * s) / 2, btn_row_y + (btn_h - 24 * s) / 2,
-				ink_bgr, s * 100, s * 100, icon_path
-			))
-		end
+		emit_centered_icon(idef[3], idef[1], btn_row_y, idef[2], btn_h, 0.58)
 	end
 	cx = cx + pn_block_w + block_gap
 
@@ -839,16 +803,7 @@ function Controls:render()
 	elseif (state.volume or 0) <= 0 then vol_icon = 'volume_mute'
 	elseif (state.volume or 0) <= 60 then vol_icon = 'volume_down'
 	end
-	local vi_path = liquid_icons_lib.get(vol_icon)
-	if vi_path then
-		local vs = (btn_h * 0.55) / 24
-		ass:new_event()
-		ass:append(string.format(
-			'{\\an7\\pos(%d,%d)\\bord0\\shad0\\1c&H%s&\\1a&H10&\\fscx%d\\fscy%d\\p1}%s{\\p0}',
-			cx + (btn_w - 24 * vs) / 2, btn_row_y + (btn_h - 24 * vs) / 2,
-			ink_bgr, vs * 100, vs * 100, vi_path
-		))
-	end
+	emit_centered_icon(vol_icon, cx, btn_row_y, btn_w, btn_h, 0.55)
 	local vs_ax = cx + btn_w + 8
 	local vs_bx = cx + btn_w + 8 + vol_slider_w
 	local vs_h = 8
@@ -878,28 +833,6 @@ function Controls:render()
 	local rrow_y = is_narrow and (self.by - btn_h - 2) or btn_row_y
 	local rx = area_bx
 	local rbtn = btn_w + 6
-
-	-- Helper: draw an icon centered inside an already-painted pebble. Prefers a
-	-- liquid_icons (SVG-source) path, falls back to the Material Icons font glyph.
-	local function emit_centered_icon(slot_name, font_glyph, bx, by, bw, bh, scale_factor, font_size)
-		local icon_path = liquid_icons_lib.get(slot_name)
-		if icon_path then
-			local s = (bh * (scale_factor or 0.58)) / 24
-			ass:new_event()
-			ass:append(string.format(
-				'{\\an7\\pos(%d,%d)\\bord0\\shad0\\1c&H%s&\\1a&H10&\\fscx%d\\fscy%d\\p1}%s{\\p0}',
-				bx + (bw - 24 * s) / 2, by + (bh - 24 * s) / 2,
-				ink_bgr, s * 100, s * 100, icon_path
-			))
-		else
-			ass:new_event()
-			ass:append(string.format(
-				'{\\an5\\pos(%d,%d)\\fnMaterialIconsRound-Regular\\fs%d\\bord0\\shad0\\1c&H%s&}%s',
-				math.floor(bx + bw / 2), math.floor(by + bh / 2 + 1),
-				font_size or 24, ink_bgr, font_glyph
-			))
-		end
-	end
 
 	-- Fullscreen
 	rx = rx - rbtn
@@ -933,7 +866,7 @@ function Controls:render()
 		x = rx, y = rrow_y, w = audio_w, h = btn_h, r = btn_h / 2,
 		intensity = lg.intensity * (audio_hover and 1.2 or 1.0), show_frost = lg.show_frost, shadow_blur = 20,
 	})
-	emit_centered_icon('headphones', 'headphones', rx, rrow_y, audio_w, btn_h, 0.62, 24)
+	emit_centered_icon('headphones', rx, rrow_y, audio_w, btn_h, 0.62)
 	rx = rx - btn_gap
 
 	-- Info: opens mpv stats overlay (#3). Sits between audio and playlist.
@@ -946,7 +879,7 @@ function Controls:render()
 		x = rx, y = rrow_y, w = info_w, h = btn_h, r = btn_h / 2,
 		intensity = lg.intensity * (info_hover and 1.2 or 1.0), show_frost = lg.show_frost, shadow_blur = 20,
 	})
-	emit_centered_icon('info', 'info', rx, rrow_y, info_w, btn_h, 0.62, 24)
+	emit_centered_icon('info', rx, rrow_y, info_w, btn_h, 0.62)
 	rx = rx - btn_gap
 
 	-- Playlist: playlist_play (SVG-preferred, Material Icons fallback)
@@ -959,7 +892,7 @@ function Controls:render()
 		x = rx, y = rrow_y, w = pl_w, h = btn_h, r = btn_h / 2,
 		intensity = lg.intensity * (playlist_hover and 1.2 or 1.0), show_frost = lg.show_frost, shadow_blur = 20,
 	})
-	emit_centered_icon('playlist_play', 'playlist_play', rx, rrow_y, pl_w, btn_h, 0.66, 26)
+	emit_centered_icon('playlist_play', rx, rrow_y, pl_w, btn_h, 0.66)
 
 	-- ==================== 3. INTERACTIVITY ====================
 	if cursor and cursor.zone then
