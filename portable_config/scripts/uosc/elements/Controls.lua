@@ -434,10 +434,30 @@ local function _lg_resolve_tick_path()
 	if _lg_tick_path_checked then return _lg_tick_path_cached end
 	_lg_tick_path_checked = true
 	local utils = require('mp.utils')
-	local p = mp.command_native({'expand-path', '~~/scripts/uosc/assets/sounds/tick.wav'})
-	if p then
-		local info = utils.file_info(p)
-		if info and info.is_file then _lg_tick_path_cached = p end
+	-- Primary: relative to this script's own directory. Most reliable.
+	local candidate
+	if mp.get_script_directory then
+		local script_dir = mp.get_script_directory()
+		if script_dir then
+			candidate = utils.join_path(script_dir, 'assets/sounds/tick.wav')
+		end
+	end
+	-- Fallback: mpv config expansion.
+	if not candidate then
+		local ok, expanded = pcall(mp.command_native,
+			{name = 'expand-path', text = '~~/scripts/uosc/assets/sounds/tick.wav'})
+		if ok then candidate = expanded end
+	end
+	if candidate then
+		local info = utils.file_info(candidate)
+		if info and info.is_file then
+			_lg_tick_path_cached = candidate
+			mp.msg.info('liquid speedo: tick sound resolved at ' .. candidate)
+		else
+			mp.msg.warn('liquid speedo: tick.wav not found at ' .. tostring(candidate))
+		end
+	else
+		mp.msg.warn('liquid speedo: could not resolve assets/sounds/tick.wav path')
 	end
 	return _lg_tick_path_cached
 end
@@ -447,20 +467,30 @@ local function _lg_play_tick_sound()
 	local path = _lg_resolve_tick_path()
 	if not path then return end
 	_lg_tick_last_play = now
-	-- Windows-only for now (PowerShell SoundPlayer). On other OSes the
-	-- silent fallback applies.
-	if state.platform == 'windows' then
-		mp.command_native_async({
-			name = 'subprocess',
-			playback_only = false,
-			capture_stdout = false,
-			capture_stderr = false,
-			args = {
-				'powershell', '-NoProfile', '-WindowStyle', 'Hidden', '-Command',
-				string.format("(New-Object Media.SoundPlayer '%s').Play()", path)
-			},
-		}, function() end)
-	end
+	if state.platform ~= 'windows' then return end
+	-- Escape single quotes inside the PowerShell literal. Backslashes
+	-- inside single-quoted PowerShell strings are kept verbatim, so
+	-- C:\Path\To\tick.wav goes through clean.
+	local safe_path = path:gsub("'", "''")
+	-- PlaySync blocks the subprocess until the WAV is done. The
+	-- subprocess itself is async (mpv doesn't wait), so PlaySync just
+	-- guarantees the player thread doesn't exit before audio finishes.
+	-- Play() (non-sync) sometimes cuts the tail off when PowerShell
+	-- exits immediately on short WAVs.
+	mp.command_native_async({
+		name = 'subprocess',
+		playback_only = false,
+		capture_stdout = false,
+		capture_stderr = false,
+		args = {
+			'powershell', '-NoProfile', '-WindowStyle', 'Hidden', '-Command',
+			string.format("(New-Object Media.SoundPlayer '%s').PlaySync()", safe_path)
+		},
+	}, function(_, result, err)
+		if err then
+			mp.msg.warn('liquid speedo tick subprocess error: ' .. tostring(err))
+		end
+	end)
 end
 
 function Controls:render()
@@ -1084,23 +1114,49 @@ function Controls:render()
 
 	if show_speed_osd then
 		-- ---------- Speedometer OSD ----------
-		local OSD_SIZE   = 340                   -- glass block size (square)
-		local R_OUT      = 142                   -- outer tick radius
-		local R_MAJOR_IN = 124                   -- inner end of major ticks
-		local R_MINOR_IN = 132                   -- inner end of minor ticks
-		local R_LABEL    = 104                   -- numeric labels radius
-		local NEEDLE_LEN = 122                   -- needle tip distance
-		local NEEDLE_BACK = 12                   -- needle stub behind the hub
-		local HUB_R      = 9                     -- centre hub radius
-		local LABEL_FS   = 14
-		local VALUE_FS   = 38
+		-- Tunables — bump radii up if you grow OSD_SIZE.
+		local OSD_SIZE       = 400          -- glass block size (square)
+		local R_RIM          = 162          -- thin decorative outer ring
+		local R_PROGRESS     = 156          -- accent-coloured fill arc
+		local R_OUT          = 150          -- outer end of tick marks
+		local R_MAJOR_IN     = 126          -- inner end of major ticks (24 px)
+		local R_MINOR_IN     = 138          -- inner end of minor ticks (12 px)
+		local R_LABEL        = 102          -- numeric labels radius
+		local NEEDLE_LEN     = 128
+		local NEEDLE_BACK    = 14
+		local HUB_R          = 11
+		local LABEL_FS       = 24           -- WAS 14 — much bigger now
+		local VALUE_FS       = 48           -- the big centred speed text
+		local SUBTITLE_FS    = 15
+		local RIM_BORD       = 1.8          -- outer ring stroke thickness
+		local PROGRESS_BORD  = 5            -- fill-arc stroke thickness
 
 		local osd_x = win_cx - OSD_SIZE / 2
 		local osd_y = win_cy - OSD_SIZE / 2
 		draw_glass({
-			x = osd_x, y = osd_y, w = OSD_SIZE, h = OSD_SIZE, r = 34,
+			x = osd_x, y = osd_y, w = OSD_SIZE, h = OSD_SIZE, r = 36,
 			intensity = lg.intensity * 1.8, show_frost = lg.show_frost, shadow_blur = 40,
 		})
+
+		-- Helper: emit an arc as a stroked polyline (\bord gives thickness).
+		local function emit_arc(radius, start_deg, end_deg, color_rgb, alpha_byte, bord)
+			local span = math.abs(end_deg - start_deg)
+			local samples = math.max(8, math.ceil(span / 4))
+			local parts = {}
+			for i = 0, samples do
+				local a = start_deg + (end_deg - start_deg) * (i / samples)
+				local theta = math.rad(a - 90)
+				local x = win_cx + math.cos(theta) * radius
+				local y = win_cy + math.sin(theta) * radius
+				parts[#parts + 1] = string.format('%s %.1f %.1f',
+					i == 0 and 'm' or 'l', x, y)
+			end
+			ass:new_event()
+			ass:append(string.format(
+				'{\\an7\\pos(0,0)\\bord%.2f\\shad0\\1a&HFF&\\3c&H%s&\\3a%s\\p1}%s{\\p0}',
+				bord, _lg_bgr(color_rgb), alpha_byte, table.concat(parts, ' ')
+			))
+		end
 
 		-- ---- Spring physics for the needle ----
 		local cur_speed = state.speed or 1.0
@@ -1144,13 +1200,28 @@ function Controls:render()
 			end
 		end
 
-		-- ---- Render scale ticks + labels ----
 		local current_angle = self._lg_speed_current_angle
+
+		-- ---- Outer decorative rim (faint full sweep) ----
+		emit_arc(R_RIM, LG_SPEED_ANGLE_START, LG_SPEED_ANGLE_END,
+			ink_rgb, '&H90&', RIM_BORD)
+
+		-- ---- Progress fill arc (start → current needle angle) ----
+		-- The accent colour from the theme; clamps so a needle below the
+		-- floor or above the ceiling doesn't render a backwards arc.
+		local fill_to = math.max(LG_SPEED_ANGLE_START,
+			math.min(LG_SPEED_ANGLE_END, current_angle))
+		if fill_to > LG_SPEED_ANGLE_START + 0.5 then
+			emit_arc(R_PROGRESS, LG_SPEED_ANGLE_START, fill_to,
+				liquid_theme_lib.current.accent, '&H30&', PROGRESS_BORD)
+		end
+
+		-- ---- Scale ticks + labels ----
 		for i, s in ipairs(LG_SPEED_STEPS) do
 			local a = angle_for_index(i)
-			local theta = math.rad(a - 90)  -- 0° up → math 0 right offset
+			local theta = math.rad(a - 90)  -- 0° up → math 0° right
 			local cos_t, sin_t = math.cos(theta), math.sin(theta)
-			local x1, y1 = win_cx + cos_t * R_OUT,      win_cy + sin_t * R_OUT
+			local x1, y1 = win_cx + cos_t * R_OUT, win_cy + sin_t * R_OUT
 			-- Major step (whole numbers) vs minor (the 0.25/0.5/0.75 fractions).
 			local is_major = (math.abs(s - math.floor(s + 0.5)) < 0.01)
 			local r_in = is_major and R_MAJOR_IN or R_MINOR_IN
@@ -1159,29 +1230,32 @@ function Controls:render()
 			local flash_t = self._lg_speed_tick_flash[i]
 			local is_flashing = flash_t and (now - flash_t) < LG_SPEED_FLASH_DUR
 			local tick_color = is_flashing and LG_GLOW_COLOR or ink_rgb
-			local tick_bgr = _lg_bgr(tick_color)
-			local tick_w = is_major and 3 or 2
+			local tick_alpha = is_major and '&H00&' or '&H50&'
+			if is_flashing then tick_alpha = '&H00&' end
+			local tick_w = is_major and 3.5 or 2
 			-- Emit as a thin rectangle along the radial direction.
-			local px, py = -sin_t, cos_t  -- perpendicular unit vector
+			local px, py = -sin_t, cos_t
 			local hw = tick_w / 2
 			ass:new_event()
 			ass:append(string.format(
-				'{\\an7\\pos(0,0)\\bord0\\shad0\\1c&H%s&\\1a&H00&\\p1}m %.1f %.1f l %.1f %.1f l %.1f %.1f l %.1f %.1f{\\p0}',
-				tick_bgr,
+				'{\\an7\\pos(0,0)\\bord0\\shad0\\1c&H%s&\\1a%s\\p1}m %.1f %.1f l %.1f %.1f l %.1f %.1f l %.1f %.1f{\\p0}',
+				_lg_bgr(tick_color), tick_alpha,
 				x1 + px * hw, y1 + py * hw,
 				x2 + px * hw, y2 + py * hw,
 				x2 - px * hw, y2 - py * hw,
 				x1 - px * hw, y1 - py * hw
 			))
-			-- Numeric label for major ticks only (so the dial stays clean).
+			-- Numeric label for major ticks only (keeps the dial clean).
 			if is_major then
 				local lx, ly = win_cx + cos_t * R_LABEL, win_cy + sin_t * R_LABEL
 				local label = string.format('%.2g', s)
+				-- The label "flashes" too — same gold pulse when its tick crosses.
+				local label_color = is_flashing and LG_GLOW_COLOR or ink_rgb
 				ass:new_event()
 				ass:append(string.format(
-					'{\\an5\\pos(%d,%d)\\fnGeist\\fs%d\\b1\\bord0\\shad0\\1c&H%s&}%s',
+					'{\\an5\\pos(%d,%d)\\fnGeist\\fs%d\\b1\\bord2\\3c&H000000&\\3a&H50&\\shad0\\1c&H%s&}%s',
 					math.floor(lx + 0.5), math.floor(ly + 0.5),
-					LABEL_FS, ink_bgr, label
+					LABEL_FS, _lg_bgr(label_color), label
 				))
 			end
 		end
@@ -1209,9 +1283,9 @@ function Controls:render()
 			))
 		end
 
-		-- ---- Centre hub (small filled circle approximated by an octagon) ----
+		-- ---- Centre hub (filled accent disc + thin ink ring) ----
 		do
-			local n = 16
+			local n = 18
 			local parts = {}
 			for k = 0, n - 1 do
 				local a = (k / n) * 2 * math.pi
@@ -1221,8 +1295,8 @@ function Controls:render()
 			end
 			ass:new_event()
 			ass:append(string.format(
-				'{\\an7\\pos(0,0)\\bord0\\shad0\\1c&H%s&\\1a&H00&\\p1}%s{\\p0}',
-				ink_bgr, table.concat(parts, ' ')
+				'{\\an7\\pos(0,0)\\bord1.5\\shad0\\3c&H%s&\\3a&H00&\\1c&H%s&\\1a&H00&\\p1}%s{\\p0}',
+				ink_bgr, accent_bgr, table.concat(parts, ' ')
 			))
 		end
 
@@ -1230,8 +1304,14 @@ function Controls:render()
 		local val_text = string.format('%.2g×', cur_speed)
 		ass:new_event()
 		ass:append(string.format(
-			'{\\an5\\pos(%d,%d)\\fnGeist\\fs%d\\b1\\bord0\\shad0\\1c&H%s&}%s',
-			win_cx, win_cy + 78, VALUE_FS, ink_bgr, val_text
+			'{\\an5\\pos(%d,%d)\\fnGeist\\fs%d\\b1\\bord2\\3c&H000000&\\3a&H40&\\shad0\\1c&H%s&}%s',
+			win_cx, win_cy + 90, VALUE_FS, ink_bgr, val_text
+		))
+		-- Subtitle "PLAYBACK SPEED" below the value, lighter weight.
+		ass:new_event()
+		ass:append(string.format(
+			'{\\an5\\pos(%d,%d)\\fnGeist\\fs%d\\b1\\bord0\\shad0\\1c&H%s&\\1a&H60&}PLAYBACK SPEED',
+			win_cx, win_cy + 126, SUBTITLE_FS, ink_bgr
 		))
 
 		-- Keep rendering until the needle settles AND the OSD timeout has passed.
