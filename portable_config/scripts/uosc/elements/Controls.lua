@@ -401,6 +401,68 @@ local function _lg_bgr(rrggbb)
 	return rrggbb:sub(5, 6) .. rrggbb:sub(3, 4) .. rrggbb:sub(1, 2)
 end
 
+-- ===== Speedometer constants & tick sound =====
+-- Speed steps the gauge snaps to. Match the existing speed picker.
+local LG_SPEED_STEPS = {0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0}
+
+-- Sweep: 0.25× sits at the bottom-left, 3.0× at the bottom-right,
+-- 1.625× at the very top. 270° of travel between them.
+local LG_SPEED_ANGLE_START = -135   -- degrees, 0° = pointing UP, clockwise positive
+local LG_SPEED_ANGLE_END   =  135
+local LG_SPEED_ANGLE_SPAN  = LG_SPEED_ANGLE_END - LG_SPEED_ANGLE_START  -- 270
+
+-- Spring physics for the needle. Tune for the bike-cluster feel:
+--   higher stiffness → snappier
+--   higher damping   → less overshoot (2*sqrt(stiffness) = critical)
+-- Defaults: one visible overshoot bob, settles in ~0.6 s. Try
+-- stiffness=110, damping=7 for a sloppier (carnival) feel, or
+-- stiffness=200, damping=22 for an electronic/digital cluster look.
+local LG_SPEED_STIFFNESS = 160
+local LG_SPEED_DAMPING   = 18
+-- Wall-clock duration the OSD stays after the last scroll input.
+local LG_SPEED_OSD_HOLD  = 1.8
+-- A tick flashes gold for this many seconds after the needle crosses it.
+local LG_SPEED_FLASH_DUR = 0.22
+
+-- Subprocess-based audio tick. Plays portable_config/scripts/uosc/
+-- assets/sounds/tick.wav if it exists; silent otherwise. Throttled to
+-- ~80 ms between ticks so rapid scrolls don't pile up subprocesses.
+local _lg_tick_last_play  = 0
+local _lg_tick_path_cached = nil
+local _lg_tick_path_checked = false
+local function _lg_resolve_tick_path()
+	if _lg_tick_path_checked then return _lg_tick_path_cached end
+	_lg_tick_path_checked = true
+	local utils = require('mp.utils')
+	local p = mp.command_native({'expand-path', '~~/scripts/uosc/assets/sounds/tick.wav'})
+	if p then
+		local info = utils.file_info(p)
+		if info and info.is_file then _lg_tick_path_cached = p end
+	end
+	return _lg_tick_path_cached
+end
+local function _lg_play_tick_sound()
+	local now = mp.get_time()
+	if now - _lg_tick_last_play < 0.08 then return end
+	local path = _lg_resolve_tick_path()
+	if not path then return end
+	_lg_tick_last_play = now
+	-- Windows-only for now (PowerShell SoundPlayer). On other OSes the
+	-- silent fallback applies.
+	if state.platform == 'windows' then
+		mp.command_native_async({
+			name = 'subprocess',
+			playback_only = false,
+			capture_stdout = false,
+			capture_stderr = false,
+			args = {
+				'powershell', '-NoProfile', '-WindowStyle', 'Hidden', '-Command',
+				string.format("(New-Object Media.SoundPlayer '%s').Play()", path)
+			},
+		}, function() end)
+	end
+end
+
 function Controls:render()
 	local visibility = self:get_visibility()
 	if visibility <= 0 then return end
@@ -415,6 +477,7 @@ function Controls:render()
 	self._lg_play_hover = self._lg_play_hover or 0
 	self._lg_vol_osd_until = self._lg_vol_osd_until or 0
 	self._lg_seek_osd_until = self._lg_seek_osd_until or 0
+	self._lg_speed_osd_until = self._lg_speed_osd_until or 0
 
 	-- Suppress all stock uosc surfaces — we draw everything here.
 	if Elements then
@@ -772,6 +835,7 @@ function Controls:render()
 
 	-- Speed button (speedometer icon).
 	local speed_rect = {ax = cx, ay = btn_row_y, bx = cx + btn_w, by = btn_row_y + btn_h}
+	self._lg_speed_rect = speed_rect  -- consumed by lg-scroll-* handlers
 	local speed_hover = get_point_to_rectangle_proximity(cursor, speed_rect) == 0
 	draw_button(cx, btn_row_y, btn_w, btn_h, 'speed', speed_hover)
 	cx = cx + btn_w + btn_gap
@@ -987,9 +1051,11 @@ function Controls:render()
 	local win_cx = display.width / 2
 	local win_cy = display.height / 2
 
-	-- Only one OSD at a time: volume takes priority if both are active.
-	local show_vol_osd = now < self._lg_vol_osd_until
-	local show_seek_osd = (not show_vol_osd) and now < self._lg_seek_osd_until
+	-- Only one OSD at a time: volume > speed > seek priority.
+	local show_vol_osd   = now < (self._lg_vol_osd_until or 0)
+	local show_speed_osd = (not show_vol_osd) and now < (self._lg_speed_osd_until or 0)
+	local show_seek_osd  = (not show_vol_osd) and (not show_speed_osd)
+	                       and now < (self._lg_seek_osd_until or 0)
 
 	if show_vol_osd then
 		local osd_w, osd_h = 220, 180
@@ -1014,6 +1080,166 @@ function Controls:render()
 			win_cx, win_cy + 52, ink_bgr, vol_text
 		))
 		if now < self._lg_vol_osd_until - 0.05 then request_render() end
+	end
+
+	if show_speed_osd then
+		-- ---------- Speedometer OSD ----------
+		local OSD_SIZE   = 340                   -- glass block size (square)
+		local R_OUT      = 142                   -- outer tick radius
+		local R_MAJOR_IN = 124                   -- inner end of major ticks
+		local R_MINOR_IN = 132                   -- inner end of minor ticks
+		local R_LABEL    = 104                   -- numeric labels radius
+		local NEEDLE_LEN = 122                   -- needle tip distance
+		local NEEDLE_BACK = 12                   -- needle stub behind the hub
+		local HUB_R      = 9                     -- centre hub radius
+		local LABEL_FS   = 14
+		local VALUE_FS   = 38
+
+		local osd_x = win_cx - OSD_SIZE / 2
+		local osd_y = win_cy - OSD_SIZE / 2
+		draw_glass({
+			x = osd_x, y = osd_y, w = OSD_SIZE, h = OSD_SIZE, r = 34,
+			intensity = lg.intensity * 1.8, show_frost = lg.show_frost, shadow_blur = 40,
+		})
+
+		-- ---- Spring physics for the needle ----
+		local cur_speed = state.speed or 1.0
+		-- Nearest step → target angle.
+		local nearest_idx = 1
+		local nearest_diff = math.huge
+		for i, s in ipairs(LG_SPEED_STEPS) do
+			local d = math.abs(s - cur_speed)
+			if d < nearest_diff then nearest_diff = d; nearest_idx = i end
+		end
+		local function angle_for_index(i)
+			return LG_SPEED_ANGLE_START + (i - 1) * (LG_SPEED_ANGLE_SPAN / (#LG_SPEED_STEPS - 1))
+		end
+		local target_angle = angle_for_index(nearest_idx)
+
+		self._lg_speed_current_angle = self._lg_speed_current_angle or target_angle
+		self._lg_speed_velocity      = self._lg_speed_velocity or 0
+		self._lg_speed_last_t        = self._lg_speed_last_t or now
+
+		local dt = math.min(0.05, now - self._lg_speed_last_t)
+		self._lg_speed_last_t = now
+		local prev_angle = self._lg_speed_current_angle
+		local v = self._lg_speed_velocity
+		-- Semi-implicit Euler spring step.
+		v = v + (target_angle - prev_angle) * LG_SPEED_STIFFNESS * dt
+		v = v - v * LG_SPEED_DAMPING * dt
+		self._lg_speed_current_angle = prev_angle + v * dt
+		self._lg_speed_velocity = v
+
+		-- ---- Tick-crossing detection ----
+		self._lg_speed_tick_flash = self._lg_speed_tick_flash or {}
+		do
+			local lo = math.min(prev_angle, self._lg_speed_current_angle)
+			local hi = math.max(prev_angle, self._lg_speed_current_angle)
+			for i = 1, #LG_SPEED_STEPS do
+				local ta = angle_for_index(i)
+				if lo < ta and ta <= hi then
+					self._lg_speed_tick_flash[i] = now
+					_lg_play_tick_sound()
+				end
+			end
+		end
+
+		-- ---- Render scale ticks + labels ----
+		local current_angle = self._lg_speed_current_angle
+		for i, s in ipairs(LG_SPEED_STEPS) do
+			local a = angle_for_index(i)
+			local theta = math.rad(a - 90)  -- 0° up → math 0 right offset
+			local cos_t, sin_t = math.cos(theta), math.sin(theta)
+			local x1, y1 = win_cx + cos_t * R_OUT,      win_cy + sin_t * R_OUT
+			-- Major step (whole numbers) vs minor (the 0.25/0.5/0.75 fractions).
+			local is_major = (math.abs(s - math.floor(s + 0.5)) < 0.01)
+			local r_in = is_major and R_MAJOR_IN or R_MINOR_IN
+			local x2, y2 = win_cx + cos_t * r_in, win_cy + sin_t * r_in
+			-- Flash colour if recently crossed.
+			local flash_t = self._lg_speed_tick_flash[i]
+			local is_flashing = flash_t and (now - flash_t) < LG_SPEED_FLASH_DUR
+			local tick_color = is_flashing and LG_GLOW_COLOR or ink_rgb
+			local tick_bgr = _lg_bgr(tick_color)
+			local tick_w = is_major and 3 or 2
+			-- Emit as a thin rectangle along the radial direction.
+			local px, py = -sin_t, cos_t  -- perpendicular unit vector
+			local hw = tick_w / 2
+			ass:new_event()
+			ass:append(string.format(
+				'{\\an7\\pos(0,0)\\bord0\\shad0\\1c&H%s&\\1a&H00&\\p1}m %.1f %.1f l %.1f %.1f l %.1f %.1f l %.1f %.1f{\\p0}',
+				tick_bgr,
+				x1 + px * hw, y1 + py * hw,
+				x2 + px * hw, y2 + py * hw,
+				x2 - px * hw, y2 - py * hw,
+				x1 - px * hw, y1 - py * hw
+			))
+			-- Numeric label for major ticks only (so the dial stays clean).
+			if is_major then
+				local lx, ly = win_cx + cos_t * R_LABEL, win_cy + sin_t * R_LABEL
+				local label = string.format('%.2g', s)
+				ass:new_event()
+				ass:append(string.format(
+					'{\\an5\\pos(%d,%d)\\fnGeist\\fs%d\\b1\\bord0\\shad0\\1c&H%s&}%s',
+					math.floor(lx + 0.5), math.floor(ly + 0.5),
+					LABEL_FS, ink_bgr, label
+				))
+			end
+		end
+
+		-- ---- Needle (rotated trapezoid) ----
+		do
+			local theta = math.rad(current_angle - 90)
+			local nx, ny = math.cos(theta), math.sin(theta)
+			local px, py = -ny, nx
+			local base_w = 5
+			local tip_w  = 1.2
+			local bx1 = win_cx + px * base_w / 2 + nx * (-NEEDLE_BACK)
+			local by1 = win_cy + py * base_w / 2 + ny * (-NEEDLE_BACK)
+			local bx2 = win_cx - px * base_w / 2 + nx * (-NEEDLE_BACK)
+			local by2 = win_cy - py * base_w / 2 + ny * (-NEEDLE_BACK)
+			local tx1 = win_cx + px * tip_w / 2 + nx * NEEDLE_LEN
+			local ty1 = win_cy + py * tip_w / 2 + ny * NEEDLE_LEN
+			local tx2 = win_cx - px * tip_w / 2 + nx * NEEDLE_LEN
+			local ty2 = win_cy - py * tip_w / 2 + ny * NEEDLE_LEN
+			ass:new_event()
+			ass:append(string.format(
+				'{\\an7\\pos(0,0)\\bord0\\shad0\\1c&H%s&\\1a&H00&\\p1}m %.1f %.1f l %.1f %.1f l %.1f %.1f l %.1f %.1f{\\p0}',
+				accent_bgr,
+				bx1, by1, tx1, ty1, tx2, ty2, bx2, by2
+			))
+		end
+
+		-- ---- Centre hub (small filled circle approximated by an octagon) ----
+		do
+			local n = 16
+			local parts = {}
+			for k = 0, n - 1 do
+				local a = (k / n) * 2 * math.pi
+				local x = win_cx + math.cos(a) * HUB_R
+				local y = win_cy + math.sin(a) * HUB_R
+				parts[#parts + 1] = string.format('%s %.1f %.1f', k == 0 and 'm' or 'l', x, y)
+			end
+			ass:new_event()
+			ass:append(string.format(
+				'{\\an7\\pos(0,0)\\bord0\\shad0\\1c&H%s&\\1a&H00&\\p1}%s{\\p0}',
+				ink_bgr, table.concat(parts, ' ')
+			))
+		end
+
+		-- ---- Big value text below centre ----
+		local val_text = string.format('%.2g×', cur_speed)
+		ass:new_event()
+		ass:append(string.format(
+			'{\\an5\\pos(%d,%d)\\fnGeist\\fs%d\\b1\\bord0\\shad0\\1c&H%s&}%s',
+			win_cx, win_cy + 78, VALUE_FS, ink_bgr, val_text
+		))
+
+		-- Keep rendering until the needle settles AND the OSD timeout has passed.
+		local needs_anim = math.abs(target_angle - self._lg_speed_current_angle) > 0.05
+		                 or math.abs(self._lg_speed_velocity) > 0.5
+		if needs_anim or now < self._lg_speed_osd_until - 0.05 then
+			request_render()
+		end
 	end
 
 	if show_seek_osd then
@@ -1058,13 +1284,59 @@ end
 -- Global scroll handler: input.conf routes WHEEL_UP/DOWN here.
 -- If cursor is over the volume block, adjust volume + show volume OSD.
 -- Otherwise, seek + show seek OSD.
+-- Cursor-over-rect helper (the controls patch uses several of these).
+local function _lg_cursor_in_rect(rect)
+	return rect and cursor
+		and cursor.x >= rect.ax and cursor.x <= rect.bx
+		and cursor.y >= rect.ay and cursor.y <= rect.by
+end
+
+-- Step the speed by +/- 1 entry in LG_SPEED_STEPS, snapping to the
+-- nearest existing step first if the current value is off-grid.
+-- Returns the index of the previously-snapped speed (so the caller can
+-- seed the needle's starting angle for the spring animation).
+local function _lg_step_speed(direction)
+	local cur = state.speed or 1.0
+	local nearest_i, nearest_d = 1, math.huge
+	for i, s in ipairs(LG_SPEED_STEPS) do
+		local d = math.abs(s - cur)
+		if d < nearest_d then nearest_d = d; nearest_i = i end
+	end
+	-- If we're sitting cleanly on a step, move by `direction`; otherwise
+	-- the snap itself already moved us in the direction the user wants
+	-- (e.g. 1.07× with +1 → snap to 1.0× then bump to 1.25×).
+	local prev_i = nearest_i
+	local target_i = nearest_i
+	if nearest_d < 0.01 then target_i = nearest_i + direction
+	elseif direction > 0 and LG_SPEED_STEPS[nearest_i] < cur then target_i = nearest_i + 1
+	elseif direction < 0 and LG_SPEED_STEPS[nearest_i] > cur then target_i = nearest_i - 1
+	end
+	target_i = math.max(1, math.min(#LG_SPEED_STEPS, target_i))
+	mp.commandv('no-osd', 'set', 'speed', LG_SPEED_STEPS[target_i])
+	return prev_i
+end
+
+-- Seed the needle's current angle to the OLD speed step so the spring
+-- has somewhere to swing FROM. No-op on second and later scrolls
+-- because we keep the in-flight angle.
+local function _lg_seed_needle_angle(ctrl, prev_i)
+	if ctrl._lg_speed_current_angle == nil then
+		ctrl._lg_speed_current_angle =
+			LG_SPEED_ANGLE_START + (prev_i - 1) * (LG_SPEED_ANGLE_SPAN / (#LG_SPEED_STEPS - 1))
+		ctrl._lg_speed_velocity = 0
+	end
+end
+
 mp.register_script_message('lg-scroll-up', function()
 	local ctrl = Elements and Elements.controls
 	if not ctrl then mp.commandv('no-osd', 'seek', 5, 'relative+exact'); return end
-	-- Check if cursor is over the volume block area
-	if ctrl._lg_vol_block_rect and cursor and
-	   cursor.x >= ctrl._lg_vol_block_rect.ax and cursor.x <= ctrl._lg_vol_block_rect.bx and
-	   cursor.y >= ctrl._lg_vol_block_rect.ay and cursor.y <= ctrl._lg_vol_block_rect.by then
+	if _lg_cursor_in_rect(ctrl._lg_speed_rect) then
+		local prev_i = _lg_step_speed(1)
+		_lg_seed_needle_angle(ctrl, prev_i)
+		ctrl._lg_speed_osd_until = mp.get_time() + LG_SPEED_OSD_HOLD
+		ctrl._lg_vol_osd_until = 0
+		ctrl._lg_seek_osd_until = 0
+	elseif _lg_cursor_in_rect(ctrl._lg_vol_block_rect) then
 		local new_vol = math.min((state.volume or 0) + 5, state.volume_max or 100)
 		mp.commandv('no-osd', 'set', 'volume', new_vol)
 		ctrl._lg_vol_osd_until = mp.get_time() + 2
@@ -1080,9 +1352,13 @@ end)
 mp.register_script_message('lg-scroll-down', function()
 	local ctrl = Elements and Elements.controls
 	if not ctrl then mp.commandv('no-osd', 'seek', -5, 'relative+exact'); return end
-	if ctrl._lg_vol_block_rect and cursor and
-	   cursor.x >= ctrl._lg_vol_block_rect.ax and cursor.x <= ctrl._lg_vol_block_rect.bx and
-	   cursor.y >= ctrl._lg_vol_block_rect.ay and cursor.y <= ctrl._lg_vol_block_rect.by then
+	if _lg_cursor_in_rect(ctrl._lg_speed_rect) then
+		local prev_i = _lg_step_speed(-1)
+		_lg_seed_needle_angle(ctrl, prev_i)
+		ctrl._lg_speed_osd_until = mp.get_time() + LG_SPEED_OSD_HOLD
+		ctrl._lg_vol_osd_until = 0
+		ctrl._lg_seek_osd_until = 0
+	elseif _lg_cursor_in_rect(ctrl._lg_vol_block_rect) then
 		local new_vol = math.max((state.volume or 0) - 5, 0)
 		mp.commandv('no-osd', 'set', 'volume', new_vol)
 		ctrl._lg_vol_osd_until = mp.get_time() + 2
