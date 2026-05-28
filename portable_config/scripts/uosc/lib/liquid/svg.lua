@@ -266,14 +266,62 @@ local function shape_modes(attrs)
   return stubs
 end
 
+-- Extract a property out of an SVG inline `style="..."` attribute.
+-- e.g. style_value("fill:#FC9B28;opacity:0.4", "fill") -> "#FC9B28"
+local function style_value(style_str, key)
+  if not style_str or style_str == '' then return nil end
+  for k, v in style_str:gmatch('([%w%-]+)%s*:%s*([^;]+)') do
+    if k == key then return v:match('^%s*(.-)%s*$') end
+  end
+  return nil
+end
+
+-- Treat "#FFCC33" or "FFCC33" alike; drop the leading '#'. Returns nil
+-- for non-hex values ("none", "white", "currentColor") so the renderer
+-- can safely fall through to the caller's ink colour.
+local function clean_color(c)
+  if not c or c == 'none' or c == '' then return nil end
+  local hex = c:gsub('^#', '')
+  if hex:match('^%x%x%x%x%x%x$') then return hex end
+  return nil
+end
+
 -- Walk the SVG text element-by-element, maintaining a stack of <g>
 -- contexts (opacity, transform).
 function M.parse(svg_text)
   local shapes = {}
-  local g_stack = {{opacity = 1, transform = IDENT}}
 
   -- Strip XML comments to keep regexes simple.
   svg_text = svg_text:gsub('<!--.-%-%->', '')
+
+  -- Build a root transform that normalises any viewBox to 0..24 path
+  -- units, so a 4000x4000 illustration and a 24x24 icon both render at
+  -- the same screen pixel size when the caller asks for `size = N`.
+  local root_xform = IDENT
+  local view_w, view_h = 24, 24
+  local svg_open = svg_text:match('<svg[^>]*>')
+  if svg_open then
+    local vb = svg_open:match('viewBox%s*=%s*"([^"]+)"') or svg_open:match("viewBox%s*=%s*'([^']+)'")
+    if vb then
+      local nums = tokenize_numbers(vb)
+      if #nums >= 4 then
+        local mx, my, w, h = nums[1], nums[2], nums[3], nums[4]
+        if w > 0 and h > 0 then
+          view_w, view_h = w, h
+          local max_dim = math.max(w, h)
+          local scale = 24 / max_dim
+          -- translate so (mx,my) becomes origin, then scale.
+          root_xform = mat_mul({scale, 0, 0, scale, 0, 0},
+                                {1, 0, 0, 1, -mx, -my})
+        end
+      end
+    end
+  end
+  -- Stroke widths are in path-units of the source viewBox, so they need
+  -- the same scale factor when the viewBox is bigger than 24x24.
+  local stroke_scale = 24 / math.max(view_w, view_h)
+
+  local g_stack = {{opacity = 1, transform = root_xform, color = nil}}
 
   -- Single-pass scanner: find every tag in source order.
   local i = 1
@@ -296,14 +344,16 @@ function M.parse(svg_text)
       end
       i = gt + 1
     elseif tag_name == 'g' then
-      local opacity_str = attr(tag_body, 'opacity')
+      local style_str = attr(tag_body, 'style')
+      local op = tonumber(attr(tag_body, 'opacity') or style_value(style_str, 'opacity')) or 1
       local transform_str = attr(tag_body, 'transform')
-      local op = tonumber(opacity_str) or 1
+      local g_fill = clean_color(attr(tag_body, 'fill') or style_value(style_str, 'fill'))
       local parent = g_stack[#g_stack]
       local combined_xform = mat_mul(parent.transform, parse_transform(transform_str))
       g_stack[#g_stack + 1] = {
         opacity = (parent.opacity or 1) * op,
         transform = combined_xform,
+        color = g_fill or parent.color,
       }
       i = gt + 1
     elseif tag_name == 'path' or tag_name == 'circle' or tag_name == 'line' or tag_name == 'rect' then
@@ -311,14 +361,26 @@ function M.parse(svg_text)
       local local_xform = parse_transform(attr(tag_body, 'transform'))
       local effective = mat_mul(parent.transform, local_xform)
 
-      local self_op = tonumber(attr(tag_body, 'opacity')) or 1
+      local style_str = attr(tag_body, 'style')
+      local self_op = tonumber(attr(tag_body, 'opacity') or style_value(style_str, 'opacity')) or 1
       local effective_opacity = parent.opacity * self_op
+      -- Fill / stroke can be set either as XML attributes (`fill="..."`)
+      -- or via inline CSS (`style="fill:#XXX"`). Adobe Illustrator
+      -- exports favour the latter, so we read both.
+      local fill_value   = attr(tag_body, 'fill')   or style_value(style_str, 'fill')
+      local stroke_value = attr(tag_body, 'stroke') or style_value(style_str, 'stroke')
+      local sw_value     = attr(tag_body, 'stroke%-width') or style_value(style_str, 'stroke-width')
       local attrs = {
-        fill         = attr(tag_body, 'fill'),
-        stroke       = attr(tag_body, 'stroke'),
-        stroke_width = attr(tag_body, 'stroke%-width'),
+        fill         = fill_value,
+        stroke       = stroke_value,
+        stroke_width = sw_value,
       }
       local stubs = shape_modes(attrs)
+      -- Per-shape colour preserved so multi-colour illustrations (cat,
+      -- etc.) keep their palette instead of becoming monochrome blobs.
+      local own_fill_color   = clean_color(fill_value)
+      local own_stroke_color = clean_color(stroke_value)
+      local inherited_color  = parent.color
 
       local ass_path
       if tag_name == 'path' then
@@ -347,11 +409,19 @@ function M.parse(svg_text)
 
       if ass_path and #ass_path > 0 then
         for _, stub in ipairs(stubs) do
+          local shape_color
+          if stub.mode == 'fill' then
+            shape_color = own_fill_color or inherited_color
+          else
+            shape_color = own_stroke_color or inherited_color
+          end
           shapes[#shapes + 1] = {
             ass_path     = ass_path,
             mode         = stub.mode,
-            stroke_width = stub.stroke_width,
+            -- Path-unit widths are scaled to the normalised 24-grid.
+            stroke_width = stub.stroke_width * stroke_scale,
             opacity      = effective_opacity,
+            color        = shape_color,  -- nil → renderer uses caller ink
           }
         end
       end

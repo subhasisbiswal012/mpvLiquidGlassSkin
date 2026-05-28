@@ -917,16 +917,44 @@ function render()
 	-- Actual rendering
 	local ass = assdraw.ass_new()
 
-	-- Idle indicator
+	-- ===== Idle screen (Liquid Glass) =====
+	-- Chill Cat illustration + funny prompt when nothing is loaded.
+	--
+	-- IDLE_FONT: pick whatever font you like the look of and drop the
+	-- .ttf/.otf into  portable_config/fonts/  — mpv auto-loads anything
+	-- in that folder on startup, no registration needed. Then put the
+	-- font's family name here. Geist-Medium ships with the project.
+	-- IDLE_TEXT: change to whatever vibe you want.
+	-- IDLE_FS:   font size in screen px.
+	-- IDLE_CAT_FRAC: cat height as a fraction of display height (0..1).
 	if state.is_idle and not Manager.disabled.idle_indicator then
-		local smaller_side = math.min(display.width, display.height)
-		local center_x, center_y, icon_size = display.width / 2, display.height / 2, math.max(smaller_side / 4, 56)
-		ass:icon(center_x, center_y - icon_size / 4, icon_size, 'not_started', {
-			color = fg, opacity = config.opacity.idle_indicator,
-		})
-		ass:txt(center_x, center_y + icon_size / 2, 8, t('Drop files or URLs to play here'), {
-			size = icon_size / 4, color = fg, opacity = config.opacity.idle_indicator,
-		})
+		local IDLE_FONT     = 'Geist-Medium'
+		local IDLE_TEXT     = "What're ya lookin' at? Drop a file or URL already, will ya?"
+		local IDLE_FS       = 42
+		local IDLE_CAT_FRAC = 0.50
+		local IDLE_TEXT_GAP = 40   -- px between cat bottom and text baseline
+
+		local icons = require('lib/liquid/icons')
+		local theme = require('lib/liquid/theme')
+		local ink_rgb = theme.current.ink
+		local ink_bgr = ink_rgb:sub(5,6) .. ink_rgb:sub(3,4) .. ink_rgb:sub(1,2)
+
+		local cx = display.width / 2
+		local cy = display.height / 2
+		local cat_size = math.min(display.height * IDLE_CAT_FRAC, 520)
+		local cat_cy = cy - IDLE_TEXT_GAP / 2 - IDLE_FS / 2
+		-- preserve_colors=true so the cat keeps its palette instead of
+		-- being recoloured to ink.
+		icons.draw_at(ass, 'idle_cat', cx, cat_cy, cat_size, ink_rgb, '&H00&', nil, true)
+
+		local text_y = math.floor(cat_cy + cat_size / 2 + IDLE_TEXT_GAP + 0.5)
+		ass:new_event()
+		ass:append(string.format(
+			'{\\an5\\pos(%d,%d)\\fn%s\\fs%d\\bord2\\3c&H000000&\\3a&H20&' ..
+			'\\shad2\\4c&H000000&\\4a&H40&\\1c&H%s&}%s',
+			math.floor(cx + 0.5), text_y,
+			IDLE_FONT, IDLE_FS, ink_bgr, IDLE_TEXT
+		))
 	end
 
 	-- Audio indicator

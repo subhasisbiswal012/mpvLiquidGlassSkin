@@ -636,9 +636,18 @@ function Controls:render()
 
 	-- ===== FILENAME LABEL (#4) =====
 	-- Shown left-aligned just above the progress bar while controls are visible.
+	-- FILENAME_FONT must match a font family installed on the system OR a
+	-- font file shipped inside portable_config/fonts/ (mpv auto-loads any
+	-- *.ttf/.otf in that folder). The default 'Bahnschrift' ships with
+	-- Windows 10+ and is condensed/modern — drop a .ttf into the fonts
+	-- folder and update this name to swap in something custom.
+	local FILENAME_FONT        = 'Bahnschrift SemiBold'
 	local FILENAME_FS          = 30   -- font size
 	local FILENAME_GAP         = 6    -- vertical gap above the progress bar
 	local FILENAME_INSET       = 4    -- horizontal inset from the controls area edge
+	local FILENAME_BORD        = 2    -- outline thickness — keeps the title legible
+	                                   -- against bright video in both light/dark themes
+	local FILENAME_SHAD        = 2    -- soft drop shadow under the title
 
 	-- Responsive: detect if too narrow for single row (vertical/portrait video).
 	local is_narrow = area_w < 500
@@ -669,10 +678,14 @@ function Controls:render()
 			display_name = display_name:gsub('\\', '\\\\'):gsub('{', '\\{'):gsub('}', '\\}')
 			ass:new_event()
 			ass:append(string.format(
-				'{\\an1\\pos(%d,%d)\\fnGeist\\fs%d\\b1\\bord1\\3c&H000000&\\3a&H40&\\shad0\\1c&H%s&}%s',
+				'{\\an1\\pos(%d,%d)\\fn%s\\fs%d\\bord%d\\3c&H000000&\\3a&H10&' ..
+				'\\shad%d\\4c&H000000&\\4a&H40&\\1c&H%s&}%s',
 				area_ax + FILENAME_INSET,
 				progress_y - FILENAME_GAP,
+				FILENAME_FONT,
 				FILENAME_FS,
+				FILENAME_BORD,
+				FILENAME_SHAD,
 				ink_bgr,
 				display_name
 			))
@@ -986,17 +999,13 @@ function Controls:render()
 			x = osd_x, y = osd_y, w = osd_w, h = osd_h, r = 28,
 			intensity = lg.intensity * 1.8, show_frost = lg.show_frost, shadow_blur = 40,
 		})
-		-- Big speaker icon
+		-- Big speaker icon — same SVG family as the volume-bar control.
 		local vol_icon_name = 'volume_up'
 		if state.mute then vol_icon_name = 'volume_off'
 		elseif (state.volume or 0) <= 0 then vol_icon_name = 'volume_mute'
 		elseif (state.volume or 0) <= 60 then vol_icon_name = 'volume_down'
 		end
-		ass:new_event()
-		ass:append(string.format(
-			'{\\an5\\pos(%d,%d)\\fnMaterialIconsRound-Regular\\fs90\\bord0\\shad0\\1c&H%s&}%s',
-			win_cx, win_cy - 18, ink_bgr, vol_icon_name
-		))
+		liquid_icons_lib.draw_at(ass, vol_icon_name, win_cx, win_cy - 18, 90, ink_rgb, '&H10&')
 		-- Volume percentage below
 		local vol_text = tostring(math.floor((state.volume or 0) + 0.5)) .. ' %'
 		ass:new_event()
@@ -1015,12 +1024,8 @@ function Controls:render()
 			x = osd_x, y = osd_y, w = osd_w, h = osd_h, r = 28,
 			intensity = lg.intensity * 1.8, show_frost = lg.show_frost, shadow_blur = 40,
 		})
-		-- Big video camera icon (larger to fill the block better)
-		ass:new_event()
-		ass:append(string.format(
-			'{\\an5\\pos(%d,%d)\\fnMaterialIconsRound-Regular\\fs90\\bord0\\shad0\\1c&H%s&}videocam',
-			win_cx, win_cy - 18, ink_bgr
-		))
+		-- Big video camera icon (user-provided SVG).
+		liquid_icons_lib.draw_at(ass, 'video_camera', win_cx, win_cy - 18, 90, ink_rgb, '&H10&')
 		-- Progress percentage below
 		local seek_pct = (state.duration and state.duration > 0)
 			and math.floor(((state.time or 0) / state.duration) * 100) or 0

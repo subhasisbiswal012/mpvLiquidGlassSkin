@@ -214,7 +214,7 @@ end
 --   extra_tags  - optional ASS override tags injected after \shad0
 --                 (e.g. "\\be3" for a soft blur — used for hover glows)
 -- Returns true if the icon was found and emitted, false otherwise.
-function M.draw_at(ass, name, cx, cy, size, ink_rgb, alpha_byte, extra_tags)
+function M.draw_at(ass, name, cx, cy, size, ink_rgb, alpha_byte, extra_tags, preserve_colors)
   local shapes = M.get_shapes(name)
   if not shapes then return false end
   local ink_bgr = bgr(ink_rgb)
@@ -226,6 +226,11 @@ function M.draw_at(ass, name, cx, cy, size, ink_rgb, alpha_byte, extra_tags)
   local yr = math.floor(y + 0.5)
   for _, sh in ipairs(shapes) do
     local eff_alpha = combine_alpha(alpha_byte, sh.opacity)
+    -- Per-shape colour is opt-in. Monochrome icons (every button glyph)
+    -- want to be tinted to the player's ink. Polychrome illustrations
+    -- (the idle-screen cat) pass preserve_colors=true to keep their
+    -- original palette.
+    local shape_bgr = (preserve_colors and sh.color) and bgr(sh.color) or ink_bgr
     if sh.mode == 'stroke' then
       -- Stroke width is in path-units; scale to screen pixels so the
       -- visible stroke stays proportional as the icon grows or shrinks.
@@ -234,14 +239,14 @@ function M.draw_at(ass, name, cx, cy, size, ink_rgb, alpha_byte, extra_tags)
       ass:append(string.format(
         '{\\an7\\pos(%d,%d)\\bord%.2f\\shad0%s\\1a&HFF&\\3c&H%s&\\3a%s' ..
         '\\fscx%.2f\\fscy%.2f\\p1}%s{\\p0}',
-        xr, yr, sw_px, extras, ink_bgr, eff_alpha, scale_pct, scale_pct, sh.ass_path
+        xr, yr, sw_px, extras, shape_bgr, eff_alpha, scale_pct, scale_pct, sh.ass_path
       ))
     else
       ass:new_event()
       ass:append(string.format(
         '{\\an7\\pos(%d,%d)\\bord0\\shad0%s\\1c&H%s&\\1a%s' ..
         '\\fscx%.2f\\fscy%.2f\\p1}%s{\\p0}',
-        xr, yr, extras, ink_bgr, eff_alpha, scale_pct, scale_pct, sh.ass_path
+        xr, yr, extras, shape_bgr, eff_alpha, scale_pct, scale_pct, sh.ass_path
       ))
     end
   end
