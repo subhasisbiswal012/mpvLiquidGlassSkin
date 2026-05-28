@@ -4,7 +4,7 @@
 	 viewBox="0 0 4000 4000" style="enable-background:new 0 0 4000 4000;" xml:space="preserve">
 <g>
 	<g>
-		<rect x="0" y="0" style="fill:#F9CFD9;" width="4000" height="4000"/>
+		<rect x="0" y="0" rx="320" ry="320" style="fill:#F9CFD9;" width="4000" height="4000"/>
 	</g>
 	<g>
 		<g>

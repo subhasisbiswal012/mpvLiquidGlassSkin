@@ -920,19 +920,25 @@ function render()
 	-- ===== Idle screen (Liquid Glass) =====
 	-- Chill Cat illustration + funny prompt when nothing is loaded.
 	--
-	-- IDLE_FONT: pick whatever font you like the look of and drop the
-	-- .ttf/.otf into  portable_config/fonts/  — mpv auto-loads anything
-	-- in that folder on startup, no registration needed. Then put the
-	-- font's family name here. Geist-Medium ships with the project.
-	-- IDLE_TEXT: change to whatever vibe you want.
-	-- IDLE_FS:   font size in screen px.
-	-- IDLE_CAT_FRAC: cat height as a fraction of display height (0..1).
+	-- Knobs:
+	--   IDLE_FONT      Font family. Drop a .ttf/.otf into
+	--                  portable_config/fonts/  (mpv auto-loads them at
+	--                  startup) and put the family name here.
+	--   IDLE_TEXT      Prompt below the cat. Change to whatever you want.
+	--   IDLE_FS        Prompt font size, in screen pixels.
+	--   IDLE_CAT_FRAC  Cat height as a fraction of display height (0..1).
+	--                  Lower = smaller cat. Default 0.36.
+	--   IDLE_CAT_MAX   Hard ceiling on the cat's pixel size, so it doesn't
+	--                  explode on a 4K display.
+	--   IDLE_TEXT_GAP  Pixels between the bottom of the cat and the
+	--                  text baseline.
 	if state.is_idle and not Manager.disabled.idle_indicator then
-		local IDLE_FONT     = 'Geist-Medium'
+		local IDLE_FONT     = 'Spell of Asia'
 		local IDLE_TEXT     = "What're ya lookin' at? Drop a file or URL already, will ya?"
-		local IDLE_FS       = 42
-		local IDLE_CAT_FRAC = 0.50
-		local IDLE_TEXT_GAP = 40   -- px between cat bottom and text baseline
+		local IDLE_FS       = 56
+		local IDLE_CAT_FRAC = 0.36
+		local IDLE_CAT_MAX  = 420
+		local IDLE_TEXT_GAP = 32
 
 		local icons = require('lib/liquid/icons')
 		local theme = require('lib/liquid/theme')
@@ -941,7 +947,7 @@ function render()
 
 		local cx = display.width / 2
 		local cy = display.height / 2
-		local cat_size = math.min(display.height * IDLE_CAT_FRAC, 520)
+		local cat_size = math.min(display.height * IDLE_CAT_FRAC, IDLE_CAT_MAX)
 		local cat_cy = cy - IDLE_TEXT_GAP / 2 - IDLE_FS / 2
 		-- preserve_colors=true so the cat keeps its palette instead of
 		-- being recoloured to ink.

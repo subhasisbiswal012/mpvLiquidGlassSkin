@@ -103,8 +103,9 @@ local function path_d_to_ass(d, xform)
   if not d or d == '' then return '' end
   xform = xform or IDENT
   local out = {}
-  local cx, cy = 0, 0      -- current point
-  local sx, sy = 0, 0      -- last move-to (subpath origin)
+  local cx, cy = 0, 0       -- current point
+  local sx, sy = 0, 0       -- last move-to (subpath origin)
+  local lcx, lcy = nil, nil -- second control point of last cubic (for S/s)
 
   local function emit_move(x, y)
     local tx, ty = mat_apply(xform, x, y)
@@ -130,7 +131,7 @@ local function path_d_to_ass(d, xform)
 
   -- Split into command + argument-blob pairs.
   local pairs_list = {}
-  for cmd, args in d:gmatch('([MLHVCZmlhvcz])([^MLHVCZmlhvcz]*)') do
+  for cmd, args in d:gmatch('([MLHVCSAZmlhvcsaz])([^MLHVCSAZmlhvcsaz]*)') do
     pairs_list[#pairs_list + 1] = {cmd, args}
   end
 
@@ -147,6 +148,7 @@ local function path_d_to_ass(d, xform)
         cx, cy = nums[i], nums[i + 1]; i = i + 2
         emit_line(cx, cy)
       end
+      lcx, lcy = nil, nil
     elseif cmd == 'm' then
       local i = 1
       cx, cy = cx + nums[i], cy + nums[i + 1]; i = i + 2
@@ -156,38 +158,45 @@ local function path_d_to_ass(d, xform)
         cx, cy = cx + nums[i], cy + nums[i + 1]; i = i + 2
         emit_line(cx, cy)
       end
+      lcx, lcy = nil, nil
     elseif cmd == 'L' then
       local i = 1
       while i + 1 <= #nums do
         cx, cy = nums[i], nums[i + 1]; i = i + 2
         emit_line(cx, cy)
       end
+      lcx, lcy = nil, nil
     elseif cmd == 'l' then
       local i = 1
       while i + 1 <= #nums do
         cx, cy = cx + nums[i], cy + nums[i + 1]; i = i + 2
         emit_line(cx, cy)
       end
+      lcx, lcy = nil, nil
     elseif cmd == 'H' then
       for _, n in ipairs(nums) do
         cx = n
         emit_line(cx, cy)
       end
+      lcx, lcy = nil, nil
     elseif cmd == 'h' then
       for _, n in ipairs(nums) do
         cx = cx + n
         emit_line(cx, cy)
       end
+      lcx, lcy = nil, nil
     elseif cmd == 'V' then
       for _, n in ipairs(nums) do
         cy = n
         emit_line(cx, cy)
       end
+      lcx, lcy = nil, nil
     elseif cmd == 'v' then
       for _, n in ipairs(nums) do
         cy = cy + n
         emit_line(cx, cy)
       end
+      lcx, lcy = nil, nil
     elseif cmd == 'C' then
       local i = 1
       while i + 5 <= #nums do
@@ -196,6 +205,7 @@ local function path_d_to_ass(d, xform)
         local x,  y  = nums[i + 4], nums[i + 5]
         emit_cubic(x1, y1, x2, y2, x, y)
         cx, cy = x, y
+        lcx, lcy = x2, y2
         i = i + 6
       end
     elseif cmd == 'c' then
@@ -206,8 +216,56 @@ local function path_d_to_ass(d, xform)
         local x,  y  = cx + nums[i + 4], cy + nums[i + 5]
         emit_cubic(x1, y1, x2, y2, x, y)
         cx, cy = x, y
+        lcx, lcy = x2, y2
         i = i + 6
       end
+    elseif cmd == 'S' then
+      -- Smooth cubic: x1 mirrors the previous cubic's second control
+      -- point about the current point (or equals current point when
+      -- the previous command was not a cubic).
+      local i = 1
+      while i + 3 <= #nums do
+        local x1, y1
+        if lcx then x1, y1 = 2 * cx - lcx, 2 * cy - lcy
+        else        x1, y1 = cx, cy end
+        local x2, y2 = nums[i],     nums[i + 1]
+        local x,  y  = nums[i + 2], nums[i + 3]
+        emit_cubic(x1, y1, x2, y2, x, y)
+        cx, cy = x, y
+        lcx, lcy = x2, y2
+        i = i + 4
+      end
+    elseif cmd == 's' then
+      local i = 1
+      while i + 3 <= #nums do
+        local x1, y1
+        if lcx then x1, y1 = 2 * cx - lcx, 2 * cy - lcy
+        else        x1, y1 = cx, cy end
+        local x2, y2 = cx + nums[i],     cy + nums[i + 1]
+        local x,  y  = cx + nums[i + 2], cy + nums[i + 3]
+        emit_cubic(x1, y1, x2, y2, x, y)
+        cx, cy = x, y
+        lcx, lcy = x2, y2
+        i = i + 4
+      end
+    elseif cmd == 'A' or cmd == 'a' then
+      -- Elliptical arc — approximated as a straight line to the
+      -- endpoint. Accurate arc-to-bezier conversion would be a chunk
+      -- of code; A barely appears in our assets, so a line keeps the
+      -- path closed without artefacts.
+      local i = 1
+      while i + 6 <= #nums do
+        local x, y
+        if cmd == 'A' then
+          x, y = nums[i + 5], nums[i + 6]
+        else
+          x, y = cx + nums[i + 5], cy + nums[i + 6]
+        end
+        emit_line(x, y)
+        cx, cy = x, y
+        i = i + 7
+      end
+      lcx, lcy = nil, nil
     elseif cmd == 'Z' or cmd == 'z' then
       -- Close path: ASS filled drawings close implicitly, but we emit
       -- a line back to the subpath origin so strokes also close.
@@ -215,6 +273,7 @@ local function path_d_to_ass(d, xform)
         emit_line(sx, sy)
       end
       cx, cy = sx, sy
+      lcx, lcy = nil, nil
     end
   end
 
@@ -398,13 +457,43 @@ function M.parse(svg_text)
         local y2 = tonumber(attr(tag_body, 'y2')) or 0
         ass_path = path_d_to_ass(string.format('M%g %g L%g %g', x1, y1, x2, y2), effective)
       elseif tag_name == 'rect' then
-        local rx = tonumber(attr(tag_body, 'x')) or 0
-        local ry = tonumber(attr(tag_body, 'y')) or 0
-        local rw = tonumber(attr(tag_body, 'width')) or 0
-        local rh = tonumber(attr(tag_body, 'height')) or 0
-        ass_path = path_d_to_ass(
-          string.format('M%g %g L%g %g L%g %g L%g %g Z', rx, ry, rx + rw, ry, rx + rw, ry + rh, rx, ry + rh),
-          effective)
+        local x_ = tonumber(attr(tag_body, 'x')) or 0
+        local y_ = tonumber(attr(tag_body, 'y')) or 0
+        local w  = tonumber(attr(tag_body, 'width')) or 0
+        local h  = tonumber(attr(tag_body, 'height')) or 0
+        local rx = tonumber(attr(tag_body, 'rx')) or 0
+        local ry = tonumber(attr(tag_body, 'ry')) or rx
+        if rx == 0 and ry == 0 then
+          ass_path = path_d_to_ass(
+            string.format('M%g %g L%g %g L%g %g L%g %g Z',
+              x_, y_, x_ + w, y_, x_ + w, y_ + h, x_, y_ + h),
+            effective)
+        else
+          -- Rounded rect via 4 cubic-bezier corners.
+          local k = 0.5523
+          local d = string.format(
+            'M%g %g L%g %g C%g %g %g %g %g %g L%g %g C%g %g %g %g %g %g ' ..
+            'L%g %g C%g %g %g %g %g %g L%g %g C%g %g %g %g %g %g Z',
+            x_ + rx, y_,
+            x_ + w - rx, y_,
+            x_ + w - rx + rx * k, y_,
+            x_ + w, y_ + ry - ry * k,
+            x_ + w, y_ + ry,
+            x_ + w, y_ + h - ry,
+            x_ + w, y_ + h - ry + ry * k,
+            x_ + w - rx + rx * k, y_ + h,
+            x_ + w - rx, y_ + h,
+            x_ + rx, y_ + h,
+            x_ + rx - rx * k, y_ + h,
+            x_, y_ + h - ry + ry * k,
+            x_, y_ + h - ry,
+            x_, y_ + ry,
+            x_, y_ + ry - ry * k,
+            x_ + rx - rx * k, y_,
+            x_ + rx, y_
+          )
+          ass_path = path_d_to_ass(d, effective)
+        end
       end
 
       if ass_path and #ass_path > 0 then
