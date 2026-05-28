@@ -4,6 +4,12 @@ A modern, glass-styled skin for [mpv](https://mpv.io/) media player. Built as a 
 
 Pure Lua + ASS rendering. No compiled components, no native code, no build step. Just copy and play.
 
+## Demo
+
+https://github.com/subhasisbiswal012/mpvLiquidGlassSkin/raw/milestone-3-icons-and-polish/Video/Demo.mp4
+
+If the player above doesn't load in your browser, [download or watch Demo.mp4 directly](Video/Demo.mp4).
+
 ![Controls bar with SVG icons and gold hover glow](screenshots/New%20Controller%20Logo.png)
 
 ## Features
