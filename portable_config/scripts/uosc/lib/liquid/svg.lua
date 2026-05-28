@@ -381,6 +381,13 @@ function M.parse(svg_text)
   local stroke_scale = 24 / math.max(view_w, view_h)
 
   local g_stack = {{opacity = 1, transform = root_xform, color = nil}}
+  -- Skip-context depth: <defs>, <clipPath>, <mask>, <symbol> all define
+  -- reusable bits that should NOT render directly. The exporter we use
+  -- ships clip-path rects inside <defs> for every icon — render them
+  -- and you get a solid white square behind the artwork.
+  local skip_depth = 0
+  local SKIP_TAGS = { defs = true, clipPath = true, clippath = true,
+                       mask = true, symbol = true, pattern = true, marker = true }
 
   -- Single-pass scanner: find every tag in source order.
   local i = 1
@@ -400,7 +407,19 @@ function M.parse(svg_text)
     if close_slash == '/' then
       if tag_name == 'g' then
         if #g_stack > 1 then table.remove(g_stack) end
+      elseif SKIP_TAGS[tag_name] then
+        if skip_depth > 0 then skip_depth = skip_depth - 1 end
       end
+      i = gt + 1
+    elseif SKIP_TAGS[tag_name] then
+      -- Self-closing definitions still need to be detected so we don't
+      -- decrement on a non-existent open. Most exporters use a real
+      -- close tag, so simple depth tracking is enough.
+      skip_depth = skip_depth + 1
+      i = gt + 1
+    elseif skip_depth > 0 then
+      -- Inside a <defs> / <clipPath> / etc. — ignore every element until
+      -- we close back out.
       i = gt + 1
     elseif tag_name == 'g' then
       local style_str = attr(tag_body, 'style')
