@@ -6,57 +6,69 @@ Pure Lua + ASS rendering. No compiled components, no native code, no build step.
 
 ## Demo
 
-https://github.com/subhasisbiswal012/mpvLiquidGlassSkin/raw/milestone-3-icons-and-polish/Video/Demo.mp4
+https://github.com/subhasisbiswal012/mpvLiquidGlassSkin/raw/main/Video/Demo.mp4
 
 If the player above doesn't load in your browser, [download or watch Demo.mp4 directly](Video/Demo.mp4).
 
-![Controls bar with SVG icons and gold hover glow](screenshots/New%20Controller%20Logo.png)
+![Full controls bar — progress, playback row, OSC row](screenshots/2%20Rows%20of%20Control%20Showing.png)
 
-## Features
+---
 
-### Glass Controls
-- **Full-width progress bar** with frosted glass effect, chapter markers, and click-to-seek + drag scrubbing
+<!-- ───────────────────────────── FEATURES ───────────────────────────── -->
+
+# Features
+
+> The skin restyles every part of mpv's on-screen UI as frosted glass pebbles with springy motion, real SVG icons, and adaptive layouts. Each subsection below pairs the feature with the screenshot that shows it.
+
+### Full-Width Glass Control Bar
+
+![Two-row control layout with full-width progress + button row](screenshots/2%20Rows%20of%20Control%20Showing.png)
+
+- **Full-width progress bar** with frosted glass effect, chapter markers, click-to-seek + drag scrubbing
 - **Filename label** above the progress bar — currently-playing media title in **Bahnschrift SemiBold** with a soft dark outline + drop shadow so it stays readable on bright video in both light and dark themes
-- **Fixed-width time block** (`X:XX / Y:YY    Z %`) with a configurable font and padding, so the layout doesn't reflow as digits tick over
+- **Fixed-width time block** (`X:XX / Y:YY    Z %`) so the layout doesn't reflow as digits tick over
 - **Fixed-width quality block** (`HD / 1080p / 4K / …`) — bigger, bolder, clickable to open the codec / fps / bitrate panel
-- **YouTube-style button row**: play/pause, prev/next, speed, quality, time + progress %, volume with horizontal slider + %, info, playlist, audio, subtitle, settings, fullscreen
+- **YouTube-style button row**: play/pause, prev/next, speed, quality, time + progress %, volume slider + %, info, playlist, audio, subtitle, settings, fullscreen
 - All controls wrapped in frosted glass pebbles with soft drop shadows and blur
 
+### Small-Window & Portrait Aware
+
+![Adaptive control layout in a portrait / reels-sized window](screenshots/Reels%20Aspect%20Ratio%20Controls%20Show.png)
+
+When the player window is narrow (portrait aspect, reels-style preview, or a docked corner), the control bar reshapes itself instead of overflowing:
+
+- Non-essential pebbles collapse first, essential transport stays anchored
+- The button row stays single-line — no controls overlap the time block or the progress bar
+- The progress bar continues to span the full window width regardless of how thin the window gets
+
 ### SVG Icon Pipeline
+
 Every glyph the player draws is a real `.svg` file under [`assets/icons/`](portable_config/scripts/uosc/assets/icons/). At startup, [`lib/liquid/svg.lua`](portable_config/scripts/uosc/lib/liquid/svg.lua) parses each file into ASS drawing commands and `lib/liquid/svg_loader.lua` registers them into the icon registry.
 
 - **Per-path fill / stroke modes** — stroke icons render with libass `\bord`, fills with `\1c`. Stroke width scales with icon size so a 1.5 px design stays proportional at any pebble.
-- **Full SVG path syntax** — `M L H V C S A Z` plus their lowercase relative variants, smooth-cubic continuation, viewBox normalization (4000 × 4000 illustrations render at the same size as a 24 × 24 icon).
-- **Element support** — `<path>`, `<circle>`, `<line>`, `<rect rx ry>` (rounded corners), `<g opacity>`, `<g transform>` with affine matrix / translate / scale, `<defs>` / `<clipPath>` / `<mask>` correctly skipped instead of rendered as artwork.
+- **Full SVG path syntax** — `M L H V C S A Z` plus their lowercase relative variants, smooth-cubic continuation, viewBox normalization.
+- **Element support** — `<path>`, `<circle>`, `<line>`, `<rect rx ry>`, `<g opacity>`, `<g transform>` with affine matrix / translate / scale, `<defs>` / `<clipPath>` / `<mask>` correctly skipped instead of rendered as artwork.
 - **Inline CSS** — `style="fill:#XXX;opacity:0.4"` (Adobe Illustrator's export style) reads alongside XML attributes.
-- **Per-shape colours** for multi-colour illustrations (opt-in, used by the idle-screen cat). Monochrome icons stay tinted to the player's ink.
+- **Per-shape colours** for multi-colour illustrations. Monochrome icons stay tinted to the player's ink.
 
-Drop any SVG into `assets/icons/<name>.svg` and the loader picks it up on next launch. The inline ASS paths in [`lib/liquid/icons.lua`](portable_config/scripts/uosc/lib/liquid/icons.lua) stay as fallbacks if the asset folder is missing.
+Drop any SVG into `assets/icons/<name>.svg` and the loader picks it up on next launch.
 
-![Volume OSD with gold glow on the icon](screenshots/new%20Volume%20Logo%20Glow%20effects.png)
+### Volume OSD
 
-### Hover Glow
-A subtle warm-gold luminosity bleeds outward from whichever icon or text label the cursor is over. The glass pebble itself stays still — only the glyph lights up. Single colour, single thickness, one knob for the whole player.
+![Centered Volume OSD with speaker icon and percentage](screenshots/Showing%20Audio%20OSD.png)
 
-- Stroked icons get a fat blurred halo around the silhouette (`\bord` + `\be`)
-- Text labels get a blurred outline (`\bord` + `\3c` + `\be`)
-- All driven by `icons.draw_glow_at()` so any icon you swap in inherits it for free
+Scroll the wheel over the volume block (or anywhere on the volume pebble) and a centred frosted-glass HUD pops up — large speaker SVG plus the current percentage. Same SVG as the inline volume control, just bigger. Auto-hides after the scroll burst ends.
 
-### Smart Scroll Behaviour
-- **Scroll on the speed pebble** = elastic speedometer (see below)
-- **Scroll on the volume block** = adjust volume + Volume OSD
-- **Scroll anywhere else on the video** = seek ±5 s + Seek OSD
+### Seek OSD
 
-### Centered OSDs (macOS style)
-When you scroll, a large centred glass overlay appears (like macOS's volume HUD):
+![Centered Seek OSD with video camera icon and progress percent](screenshots/Showing%20Video%20OSD.png)
 
-- **Volume OSD** — Big speaker SVG + percentage, centred on screen. Same SVG as the volume-bar control, just bigger.
-- **Seek OSD** — Video-camera SVG + progress %. The white background that ships with SVGRepo's `clipPath` is stripped at parse time.
-- **Speedometer OSD** — see below.
-
-![Seek OSD with the video camera SVG](screenshots/New%20Video%20Camera%20Logo.png)
+Scroll the wheel anywhere on the video itself and the player seeks ±5 s, surfacing a centred Seek HUD with a video-camera SVG and a clean progress %. The white background that ships with SVGRepo's `clipPath` is correctly stripped at parse time so only the camera silhouette shows.
 
 ### Elastic Speedometer
+
+![Speedometer OSD with elastic needle, tick flash, and gold glow](screenshots/Showing%20Speed%20OSD.png)
+
 Scroll the wheel over the speed pebble and a big circular gauge pops up in the centre of the player. The needle springs to the new speed like a bike cluster — overshoots once, settles in ~0.6 s.
 
 - **Semi-implicit Euler spring** with tunable stiffness / damping. Default 160 / 18 gives one visible overshoot bob.
@@ -65,36 +77,81 @@ Scroll the wheel over the speed pebble and a big circular gauge pops up in the c
 - **Speed range** matches the existing speed picker (0.25× → 3.0× in 0.25 steps).
 - OSD auto-hides 1.8 s after the last scroll.
 
-![Speedometer OSD with elastic needle + glow](screenshots/Speed%20Meter%20Glow%20with%20Real%20Meter.png)
-
 ### Idle Screen
+
+![Idle screen with Chill Cat illustration and friendly prompt](screenshots/Player%20SS%20with%20Instruction%20to%20Put%20Video%20and%20URL%20when%20open%20app.png)
+
 With no file loaded, the stock "Drop files or URLs here" indicator is replaced with a **Chill Cat illustration** and a friendlier prompt. Comes with a hand-picked font (Spell of Asia by default) and a fully-tunable layout — see Customise below.
 
+### Hover Glow
+
+A subtle warm-gold luminosity bleeds outward from whichever icon or text label the cursor is over. The glass pebble itself stays still — only the glyph lights up. Single colour, single thickness, one knob for the whole player.
+
+- Stroked icons get a fat blurred halo around the silhouette (`\bord` + `\be`)
+- Text labels get a blurred outline (`\bord` + `\3c` + `\be`)
+- All driven by `icons.draw_glow_at()` so any icon you swap in inherits it for free
+
+### Smart Scroll Behaviour
+
+- **Scroll on the speed pebble** = elastic speedometer (above)
+- **Scroll on the volume block** = adjust volume + Volume OSD (above)
+- **Scroll anywhere else on the video** = seek ±5 s + Seek OSD (above)
+
 ### Info Button
+
 Between the audio and playlist buttons on the right side. One click toggles mpv's built-in stats overlay (codec, fps, bitrate, dropped frames, …).
 
 ### Theme Support
+
 - **Dark theme** (default) — glass tinted for dark video backgrounds
 - **Light theme** — lighter glass with dark text
 - Toggle with **Ctrl+T** during playback
 
-## Install
+---
 
-1. **Download** this repo (Code > Download ZIP, or `git clone`).
-2. **Locate your mpv config directory:**
-   - **Windows:** `%APPDATA%\mpv\`
-   - **macOS:** `~/.config/mpv/`
-   - **Linux:** `~/.config/mpv/`
-3. **Copy** the contents of `portable_config/` into your mpv config directory.
-4. **Restart mpv.** The Liquid Glass skin will load automatically.
+<!-- ───────────────────────────── INSTALL ───────────────────────────── -->
 
-### Quick Test (without modifying your config)
+# Install
+
+> Three steps. No compile, no dependencies, no build tools. If you already have mpv installed, you're 30 seconds away from running the skin.
+
+### 1. Download the repo
+
+Either:
+- Click **Code → Download ZIP** on the GitHub page and unzip it, or
+- `git clone https://github.com/subhasisbiswal012/mpvLiquidGlassSkin.git`
+
+### 2. Locate your mpv config directory
+
+| OS | Path |
+|---|---|
+| **Windows** | `%APPDATA%\mpv\` |
+| **macOS** | `~/.config/mpv/` |
+| **Linux** | `~/.config/mpv/` |
+
+If the folder doesn't exist yet, create it.
+
+### 3. Copy the skin in
+
+Copy the **contents** of this repo's `portable_config/` directory into your mpv config directory (the `scripts/`, `fonts/`, `script-opts/` folders should land alongside any existing `mpv.conf` you have).
+
+### 4. Restart mpv
+
+The Liquid Glass skin loads automatically on next launch. No extra config switches required.
+
+---
+
+### Quick Test (without modifying your existing mpv config)
+
+If you'd rather try the skin in isolation first — without touching your existing mpv setup — run mpv directly against this repo's bundled config:
 
 ```bash
 mpv --config-dir=portable_config <your-video-file>
 ```
 
-This runs mpv with the skin's config in isolation — your existing mpv setup is untouched.
+This runs mpv with the skin's config only. Your existing mpv setup is untouched. If you like what you see, do steps 1–4 above.
+
+---
 
 ## Customise
 
@@ -192,7 +249,7 @@ Drop a short `tick.wav` (16-bit PCM, 30–80 ms) into [`assets/sounds/`](portabl
 
 The skin is built on five core libraries under `scripts/uosc/lib/liquid/`:
 
-- **glass.lua** — Six-layer rendering primitive (drop shadow, glass body, frost noise, top highlight, rim light, border)
+- **glass.lua** — Layered rendering primitive (drop shadow, glass body, frost noise, top highlight, border)
 - **theme.lua** — Dark/light token tables with intensity multiplier
 - **motion.lua** — Spring easing curves (overshoot, settle, liquid fade)
 - **icons.lua** — Icon registry + `draw_at` / `draw_glow_at` renderers (per-shape stroke/fill, per-shape colour, libass alpha + tag injection)
