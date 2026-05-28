@@ -492,15 +492,16 @@ function Controls:render()
 	-- cursor is over. The glass pebble itself does NOT change on hover —
 	-- only its glyph lights up. Knobs:
 	--   LG_GLOW_COLOR     -- one hex RRGGBB used everywhere
-	--   LG_GLOW_BLUR      -- \be iterations of the soft halo (1..10)
-	--   LG_GLOW_ALPHA     -- libass alpha byte; lower = more visible
-	--   LG_ICON_GLOW_BUMP -- the glow pass renders the icon this much bigger (px)
-	--   LG_TEXT_GLOW_BORD -- thickness of the glow outline around text
+	--   LG_GLOW_BLUR      -- libass \be iterations (1=tight, 10=soft cloud)
+	--   LG_GLOW_ALPHA     -- libass alpha byte. &H00& solid, &HFF& invisible
+	--   LG_ICON_GLOW_BORD -- screen-px thickness of the gold halo around an icon
+	--                        (3 wisp, 5 noticeable, 8 strong)
+	--   LG_TEXT_GLOW_BORD -- thickness of the gold outline around text
 	local LG_GLOW_COLOR      = 'FFD24C'
-	local LG_GLOW_BLUR       = 3
+	local LG_GLOW_BLUR       = 6
 	local LG_GLOW_ALPHA      = '&H80&'
-	local LG_ICON_GLOW_BUMP  = 2
-	local LG_TEXT_GLOW_BORD  = 2
+	local LG_ICON_GLOW_BORD  = 5
+	local LG_TEXT_GLOW_BORD  = 6
 
 	-- ===== ICON SIZING =====
 	-- LG_ICON_SCALE is the fallback used for any icon that doesn't have
@@ -533,14 +534,15 @@ function Controls:render()
 	end
 
 	-- Paint an SVG icon centred at (cx, cy) at the given pixel size.
-	-- When `is_hovered` is true, a soft gold copy of the same path is
-	-- emitted first as the glow, then the sharp ink-coloured icon on top.
+	-- When `is_hovered` is true, draw_glow_at first paints a fat blurred
+	-- gold stroke that hugs the icon's silhouette, then the sharp
+	-- ink-coloured icon is laid on top.
 	local function draw_icon(name, cx, cy, size, is_hovered)
 		if is_hovered then
-			liquid_icons_lib.draw_at(
-				ass, name, cx, cy, size + LG_ICON_GLOW_BUMP,
+			liquid_icons_lib.draw_glow_at(
+				ass, name, cx, cy, size,
 				LG_GLOW_COLOR, LG_GLOW_ALPHA,
-				string.format('\\be%d', LG_GLOW_BLUR)
+				LG_ICON_GLOW_BORD, LG_GLOW_BLUR
 			)
 		end
 		liquid_icons_lib.draw_at(ass, name, cx, cy, size, ink_rgb, '&H10&')

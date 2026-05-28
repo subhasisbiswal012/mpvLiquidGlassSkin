@@ -248,4 +248,38 @@ function M.draw_at(ass, name, cx, cy, size, ink_rgb, alpha_byte, extra_tags)
   return true
 end
 
+-- Paint a soft outward HALO around an icon's silhouette.
+--
+-- This is the companion to draw_at(). Every shape in the icon —
+-- whether the source SVG drew it as a stroke or as a fill — gets
+-- rendered here as a FAT, BLURRED stroke in `glow_rgb`. The fill is
+-- always hidden (\1a&HFF&). Drawing the icon's own paths with a
+-- bord_px-thick blurred outline makes the gold bleed outward from the
+-- visible glyph instead of sitting as a thin offset edge.
+--
+--   bord_px     - libass border thickness in screen pixels. 3 = wisp,
+--                 4-5 = noticeable halo, 7+ = strong glow
+--   blur_iters  - libass \be iterations (1..10). Higher = softer halo
+function M.draw_glow_at(ass, name, cx, cy, size, glow_rgb, alpha_byte, bord_px, blur_iters)
+  local shapes = M.get_shapes(name)
+  if not shapes then return false end
+  local g_bgr = bgr(glow_rgb)
+  local scale_pct = (size / 24) * 100
+  local x = cx - size / 2
+  local y = cy - size / 2
+  local xr = math.floor(x + 0.5)
+  local yr = math.floor(y + 0.5)
+  for _, sh in ipairs(shapes) do
+    local eff_alpha = combine_alpha(alpha_byte, sh.opacity)
+    ass:new_event()
+    ass:append(string.format(
+      '{\\an7\\pos(%d,%d)\\bord%.2f\\be%d\\shad0\\1a&HFF&\\3c&H%s&\\3a%s' ..
+      '\\fscx%.2f\\fscy%.2f\\p1}%s{\\p0}',
+      xr, yr, bord_px, blur_iters or 3,
+      g_bgr, eff_alpha, scale_pct, scale_pct, sh.ass_path
+    ))
+  end
+  return true
+end
+
 return M
