@@ -462,8 +462,12 @@ local function _lg_resolve_tick_path()
 	return _lg_tick_path_cached
 end
 local function _lg_play_tick_sound()
+	-- Lightweight guard against the same Windows-message scroll firing
+	-- twice in the same animation frame; user-driven scrolls are
+	-- naturally rate-limited so we don't need a longer throttle now
+	-- that this fires once per scroll click instead of per crossing.
 	local now = mp.get_time()
-	if now - _lg_tick_last_play < 0.08 then return end
+	if now - _lg_tick_last_play < 0.02 then return end
 	local path = _lg_resolve_tick_path()
 	if not path then return end
 	_lg_tick_last_play = now
@@ -1186,7 +1190,10 @@ function Controls:render()
 		self._lg_speed_current_angle = prev_angle + v * dt
 		self._lg_speed_velocity = v
 
-		-- ---- Tick-crossing detection ----
+		-- ---- Tick-crossing detection (visual gold flash only) ----
+		-- Audio ticks are fired by the scroll handler so the user hears
+		-- exactly one tick per scroll click. The visual flash still
+		-- responds to every needle pass — it's part of the physics feel.
 		self._lg_speed_tick_flash = self._lg_speed_tick_flash or {}
 		do
 			local lo = math.min(prev_angle, self._lg_speed_current_angle)
@@ -1195,7 +1202,6 @@ function Controls:render()
 				local ta = angle_for_index(i)
 				if lo < ta and ta <= hi then
 					self._lg_speed_tick_flash[i] = now
-					_lg_play_tick_sound()
 				end
 			end
 		end
@@ -1205,16 +1211,6 @@ function Controls:render()
 		-- ---- Outer decorative rim (faint full sweep) ----
 		emit_arc(R_RIM, LG_SPEED_ANGLE_START, LG_SPEED_ANGLE_END,
 			ink_rgb, '&H90&', RIM_BORD)
-
-		-- ---- Progress fill arc (start → current needle angle) ----
-		-- The accent colour from the theme; clamps so a needle below the
-		-- floor or above the ceiling doesn't render a backwards arc.
-		local fill_to = math.max(LG_SPEED_ANGLE_START,
-			math.min(LG_SPEED_ANGLE_END, current_angle))
-		if fill_to > LG_SPEED_ANGLE_START + 0.5 then
-			emit_arc(R_PROGRESS, LG_SPEED_ANGLE_START, fill_to,
-				liquid_theme_lib.current.accent, '&H30&', PROGRESS_BORD)
-		end
 
 		-- ---- Scale ticks + labels ----
 		for i, s in ipairs(LG_SPEED_STEPS) do
@@ -1413,6 +1409,7 @@ mp.register_script_message('lg-scroll-up', function()
 	if _lg_cursor_in_rect(ctrl._lg_speed_rect) then
 		local prev_i = _lg_step_speed(1)
 		_lg_seed_needle_angle(ctrl, prev_i)
+		_lg_play_tick_sound()
 		ctrl._lg_speed_osd_until = mp.get_time() + LG_SPEED_OSD_HOLD
 		ctrl._lg_vol_osd_until = 0
 		ctrl._lg_seek_osd_until = 0
@@ -1435,6 +1432,7 @@ mp.register_script_message('lg-scroll-down', function()
 	if _lg_cursor_in_rect(ctrl._lg_speed_rect) then
 		local prev_i = _lg_step_speed(-1)
 		_lg_seed_needle_angle(ctrl, prev_i)
+		_lg_play_tick_sound()
 		ctrl._lg_speed_osd_until = mp.get_time() + LG_SPEED_OSD_HOLD
 		ctrl._lg_vol_osd_until = 0
 		ctrl._lg_seek_osd_until = 0
