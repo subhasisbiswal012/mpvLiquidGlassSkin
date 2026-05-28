@@ -131,16 +131,12 @@ function M.draw(opts)
   -- inside the nominal body bounds.
   local stroke_path = rounded_rect_path(x + 0.5, y + 0.5, w - 1, h - 1, math.max(0, r - 0.5))
 
-  -- Layer 5: rim light — top edge ONLY. Render the inset path's \bord1
-  -- outline, rect-clipped to a 2px-tall band at the top so only the top
-  -- arc shows. \3c (border color); fill masked via \1a&HFF&.
-  table.insert(out, event(
-    string.format('\\clip(%d,%d,%d,%d)\\bord1%s\\3a%s\\1a&HFF&\\p1',
-      x, y, x + w, y + 2,
-      border_color_tag('FFFFFF'),
-      alpha_byte(theme.alpha('rim_light', intensity))),
-    stroke_path .. '{\\p0}'
-  ))
+  -- Layer 5 (rim light / glass cap) intentionally removed: a 1px stroke
+  -- clipped to a 2px band at the top arc rendered as a pixelated white
+  -- sliver in libass — subpixel AA on a 1px stroke at that scale is
+  -- inadequate, and the artifact is more visible than the glass cue it
+  -- was meant to add. The Layer 4 highlight wash now carries the top
+  -- edge on its own.
 
   -- Layer 6: full border on the inset path so the stroke stays inside.
   table.insert(out, event(
