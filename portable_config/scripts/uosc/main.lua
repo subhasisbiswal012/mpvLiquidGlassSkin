@@ -165,6 +165,88 @@ do
         end
     end
 end
+
+-- ===== Small-window behavior =====
+-- Detects video orientation, swaps controls into a portrait-friendly compact
+-- layout for vertical videos, and clamps user-driven window resizes so the
+-- player can never shrink to a size where controls would overlap.
+local lg_layout = require('lib/liquid/layout')
+
+local lg_min_opts = {
+    liquid_glass_min_width_landscape  = tostring(lg_layout.LANDSCAPE_MIN_WIDTH),
+    liquid_glass_min_height_landscape = tostring(lg_layout.LANDSCAPE_MIN_HEIGHT),
+    liquid_glass_min_width_portrait   = tostring(lg_layout.PORTRAIT_MIN_WIDTH),
+    liquid_glass_min_height_portrait  = tostring(lg_layout.PORTRAIT_MIN_HEIGHT),
+}
+require('mp.options').read_options(lg_min_opts, 'liquid-glass')
+lg_layout.LANDSCAPE_MIN_WIDTH  = tonumber(lg_min_opts.liquid_glass_min_width_landscape)  or lg_layout.LANDSCAPE_MIN_WIDTH
+lg_layout.LANDSCAPE_MIN_HEIGHT = tonumber(lg_min_opts.liquid_glass_min_height_landscape) or lg_layout.LANDSCAPE_MIN_HEIGHT
+lg_layout.PORTRAIT_MIN_WIDTH   = tonumber(lg_min_opts.liquid_glass_min_width_portrait)   or lg_layout.PORTRAIT_MIN_WIDTH
+lg_layout.PORTRAIT_MIN_HEIGHT  = tonumber(lg_min_opts.liquid_glass_min_height_portrait)  or lg_layout.PORTRAIT_MIN_HEIGHT
+
+_G.liquid_glass.layout = lg_layout
+_G.liquid_glass.orientation = 'landscape'
+
+local function lg_update_orientation()
+    local orientation = lg_layout.video_orientation()
+    if not orientation then return end
+    if _G.liquid_glass.orientation == orientation then return end
+    _G.liquid_glass.orientation = orientation
+    -- Nudge Controls (and anything else listening) to re-layout.
+    if Elements and Elements.trigger then
+        Elements:trigger('options')
+    end
+    if request_render then request_render() end
+end
+
+-- Snap user-driven resizes back up if they would force controls to overlap.
+-- We can't talk to the OS window manager from Lua, so we observe the OSD
+-- dimensions and re-apply `geometry` whenever the user has dragged below the
+-- floor. A small wall-clock cooldown keeps the property echo from looping.
+local _lg_last_clamp_time = 0
+local function lg_clamp_window()
+    if not display.initialized then return end
+    if state.fullormaxed or state.fullscreen or state.maximized then return end
+    -- No file → no controls visible → nothing to overlap. Skip clamping so the
+    -- idle screen can be any size the user wants.
+    if not state.path then return end
+    local orientation = _G.liquid_glass.orientation or 'landscape'
+    local w = mp.get_property_number('osd-width', 0)
+    local h = mp.get_property_number('osd-height', 0)
+    if w <= 0 or h <= 0 then return end
+    if not lg_layout.would_overlap(orientation, w, h) then return end
+    local now = mp.get_time()
+    if now - _lg_last_clamp_time < 0.2 then return end
+    _lg_last_clamp_time = now
+    local cw, ch = lg_layout.clamp(orientation, w, h)
+    mp.set_property('geometry', string.format('%dx%d', cw, ch))
+end
+
+mp.observe_property('video-params/w', 'number', lg_update_orientation)
+mp.observe_property('video-params/h', 'number', lg_update_orientation)
+mp.observe_property('osd-width',  'number', lg_clamp_window)
+mp.observe_property('osd-height', 'number', lg_clamp_window)
+
+-- Ask mpv to grow any starting window up to at least the landscape floor.
+-- This runs once at script init and is consulted by mpv every time a file
+-- opens — so even a 240×160 video opens at the controls-safe size instead
+-- of native and then snapping back. We use the landscape min (the larger
+-- of the two) so portrait files also open large enough; the orientation
+-- swap then happens on file-loaded once video-params are known.
+do
+    local af_w, af_h = lg_layout.LANDSCAPE_MIN_WIDTH, lg_layout.LANDSCAPE_MIN_HEIGHT
+    mp.set_property('autofit-smaller', string.format('%dx%d', af_w, af_h))
+end
+
+-- On file load, decide orientation first, then make sure the window is at
+-- least min-size for it. We re-clamp at two delays because mpv's own
+-- autofit pass can land slightly after file-loaded fires.
+mp.register_event('file-loaded', function()
+    lg_update_orientation()
+    mp.add_timeout(0.05, lg_clamp_window)
+    mp.add_timeout(0.30, lg_clamp_window)
+end)
+-- ===== /Small-window behavior =====
 -- ===== /Liquid Glass skin =====
 -- Normalize values
 options.proximity_out = math.max(options.proximity_out, options.proximity_in + 1)

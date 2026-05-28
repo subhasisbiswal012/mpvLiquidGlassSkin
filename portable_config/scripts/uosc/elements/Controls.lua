@@ -748,8 +748,12 @@ function Controls:render()
 
 	-- Responsive: detect if too narrow for single row (vertical/portrait video).
 	local is_narrow = area_w < 500
+	-- Portrait video → compact controls: only Play/Pause, Prev/Next, Time (no %),
+	-- Fullscreen, plus a vertical Volume column rendered outside the controls
+	-- area. Driven by the player-wide orientation flag from lib/liquid/layout.
+	local is_portrait = (_G.liquid_glass and _G.liquid_glass.orientation == 'portrait') or false
 	local btn_row_y, progress_y
-	if is_narrow then
+	if is_narrow and not is_portrait then
 		-- Two-row layout: progress bar on top, then row 1 (main), then row 2 (right buttons).
 		local row2_y = self.by - btn_h - 2
 		btn_row_y = row2_y - btn_h - row_gap
@@ -761,7 +765,8 @@ function Controls:render()
 
 	-- ==================== 0. FILENAME LABEL (#4) ====================
 	-- Sits above the progress bar, left-aligned, only while controls are showing.
-	do
+	-- Skipped in portrait/compact mode — no horizontal room for a title.
+	if not is_portrait then do
 		local fname = mp.get_property('filename', '')
 		if fname and fname ~= '' then
 			-- Rough character-budget so we don't overflow the player width.
@@ -787,7 +792,7 @@ function Controls:render()
 				display_name
 			))
 		end
-	end
+	end end  -- /not is_portrait
 
 	-- ==================== 1. PROGRESS BAR (full width, bigger + smoother) ====================
 	draw_glass({
@@ -867,180 +872,217 @@ function Controls:render()
 	emit_centered_icon('next',  next_cx,  btn_row_y, pn_btn, btn_h, nil, next_hover)
 	cx = cx + pn_block_w + block_gap
 
-	-- Speed button (speedometer icon).
-	local speed_rect = {ax = cx, ay = btn_row_y, bx = cx + btn_w, by = btn_row_y + btn_h}
-	self._lg_speed_rect = speed_rect  -- consumed by lg-scroll-* handlers
-	local speed_hover = get_point_to_rectangle_proximity(cursor, speed_rect) == 0
-	draw_button(cx, btn_row_y, btn_w, btn_h, 'speed', speed_hover)
-	cx = cx + btn_w + btn_gap
+	-- Speed, Quality, the inline Volume pill, and the optional right-cluster
+	-- buttons (Settings/Subtitle/Audio/Info/Playlist) only appear in landscape
+	-- mode. In portrait the only remaining controls are Play/Pause, Prev/Next,
+	-- Times (no %), and Fullscreen — see below.
+	local speed_rect, quality_rect, vol_icon_rect, vol_slider_rect
+	local vs_ax, vs_bx, vol_fill_w
+	local settings_rect, sub_rect, audio_rect, info_rect, playlist_rect
+	local fs_rect
 
-	-- Quality button: shows current resolution + opens quality picker.
-	local vid_h = mp.get_property_number('video-params/h', 0)
-	local vid_w = mp.get_property_number('video-params/w', 0)
-	local quality_label = 'HD'
-	if vid_h >= 4320 then quality_label = '8K'
-	elseif vid_h >= 2160 then quality_label = '4K'
-	elseif vid_h >= 1440 then quality_label = '1440p'
-	elseif vid_h >= 1080 then quality_label = '1080p'
-	elseif vid_h >= 720 then quality_label = '720p'
-	elseif vid_h >= 480 then quality_label = '480p'
-	elseif vid_h >= 360 then quality_label = '360p'
-	elseif vid_h >= 240 then quality_label = '240p'
-	elseif vid_h >= 144 then quality_label = '144p'
-	elseif vid_h > 0 then quality_label = tostring(vid_h) .. 'p'
+	if not is_portrait then
+		-- Speed button (speedometer icon).
+		speed_rect = {ax = cx, ay = btn_row_y, bx = cx + btn_w, by = btn_row_y + btn_h}
+		self._lg_speed_rect = speed_rect  -- consumed by lg-scroll-* handlers
+		local speed_hover = get_point_to_rectangle_proximity(cursor, speed_rect) == 0
+		draw_button(cx, btn_row_y, btn_w, btn_h, 'speed', speed_hover)
+		cx = cx + btn_w + btn_gap
+
+		-- Quality button: shows current resolution + opens quality picker.
+		local vid_h = mp.get_property_number('video-params/h', 0)
+		local quality_label = 'HD'
+		if vid_h >= 4320 then quality_label = '8K'
+		elseif vid_h >= 2160 then quality_label = '4K'
+		elseif vid_h >= 1440 then quality_label = '1440p'
+		elseif vid_h >= 1080 then quality_label = '1080p'
+		elseif vid_h >= 720 then quality_label = '720p'
+		elseif vid_h >= 480 then quality_label = '480p'
+		elseif vid_h >= 360 then quality_label = '360p'
+		elseif vid_h >= 240 then quality_label = '240p'
+		elseif vid_h >= 144 then quality_label = '144p'
+		elseif vid_h > 0 then quality_label = tostring(vid_h) .. 'p'
+		end
+		local quality_fs = is_narrow and QUALITY_FS_NARROW or QUALITY_FS_WIDE
+		local quality_w  = is_narrow and QUALITY_W_NARROW  or QUALITY_W_WIDE
+		quality_rect = {ax = cx, ay = btn_row_y, bx = cx + quality_w, by = btn_row_y + btn_h}
+		local quality_hover = get_point_to_rectangle_proximity(cursor, quality_rect) == 0
+		draw_text_button(cx, btn_row_y, quality_w, btn_h, quality_label, quality_hover, quality_fs, 'quality')
+		cx = cx + quality_w + block_gap
 	end
-	-- Apply fixed-width / scaled-font sizing from the constants block (#6).
-	local quality_fs = is_narrow and QUALITY_FS_NARROW or QUALITY_FS_WIDE
-	local quality_w  = is_narrow and QUALITY_W_NARROW  or QUALITY_W_WIDE
-	local quality_rect = {ax = cx, ay = btn_row_y, bx = cx + quality_w, by = btn_row_y + btn_h}
-	local quality_hover = get_point_to_rectangle_proximity(cursor, quality_rect) == 0
-	draw_text_button(cx, btn_row_y, quality_w, btn_h, quality_label, quality_hover, quality_fs, 'quality')
-	cx = cx + quality_w + block_gap
 
-	-- Time + percentage in one block (#5).
+	-- Time block. Landscape shows "1:23 / 4:56    42 %"; portrait drops the
+	-- percentage per requirement ("Times (no %)") and uses a narrower pill.
 	local time_str = string.format('%s / %s',
 		_lg_format_time(state.time or 0),
 		_lg_format_time(state.duration or 0))
-	local pct = math.floor(progress * 100)
-	local time_display = time_str .. TIME_TEXT_GAP .. pct .. ' %'
-	local time_fs      = is_narrow and TIME_BLOCK_FS_NARROW or TIME_BLOCK_FS_WIDE
-	local time_block_w = is_narrow and TIME_BLOCK_W_NARROW  or TIME_BLOCK_W_WIDE
-	local time_rect    = {ax = cx, ay = btn_row_y, bx = cx + time_block_w, by = btn_row_y + btn_h}
-	local time_hover   = get_point_to_rectangle_proximity(cursor, time_rect) == 0
+	local time_display
+	local time_fs, time_block_w
+	if is_portrait then
+		time_display = time_str
+		time_fs = TIME_BLOCK_FS_NARROW
+		time_block_w = TIME_BLOCK_W_NARROW
+	else
+		local pct = math.floor(progress * 100)
+		time_display = time_str .. TIME_TEXT_GAP .. pct .. ' %'
+		time_fs      = is_narrow and TIME_BLOCK_FS_NARROW or TIME_BLOCK_FS_WIDE
+		time_block_w = is_narrow and TIME_BLOCK_W_NARROW  or TIME_BLOCK_W_WIDE
+	end
+	local time_rect  = {ax = cx, ay = btn_row_y, bx = cx + time_block_w, by = btn_row_y + btn_h}
+	local time_hover = get_point_to_rectangle_proximity(cursor, time_rect) == 0
 	draw_glass({ x = cx, y = btn_row_y, w = time_block_w, h = btn_h, r = btn_h / 2, intensity = lg.intensity * 0.9, show_frost = lg.show_frost, shadow_blur = 20 })
 	draw_text_label(time_display, cx + time_block_w / 2, btn_row_y + btn_h / 2, time_fs, time_hover)
 	cx = cx + time_block_w + block_gap
 
-	-- Volume icon + slider + percentage.
-	local vol_slider_w = is_narrow and 80 or 110
-	local vol_pct_w = VOL_PCT_SLOT_W
-	local vol_block_w = btn_w + 8 + vol_slider_w + vol_pct_w
-	local vol_block_x = cx
-	local vol_block_rect_pre = {ax = cx, ay = btn_row_y, bx = cx + vol_block_w, by = btn_row_y + btn_h}
-	local vol_block_hover = get_point_to_rectangle_proximity(cursor, vol_block_rect_pre) == 0
-	draw_glass({ x = cx, y = btn_row_y, w = vol_block_w, h = btn_h, r = btn_h / 2, intensity = lg.intensity * 0.9, show_frost = lg.show_frost, shadow_blur = 20 })
-	local vol_icon_rect = {ax = cx, ay = btn_row_y, bx = cx + btn_w, by = btn_row_y + btn_h}
-	local vol_icon_hover = get_point_to_rectangle_proximity(cursor, vol_icon_rect) == 0
-	local vol_icon = 'volume_up'
-	if state.mute then vol_icon = 'volume_off'
-	elseif (state.volume or 0) <= 0 then vol_icon = 'volume_mute'
-	elseif (state.volume or 0) <= 60 then vol_icon = 'volume_down'
+	if not is_portrait then
+		-- Inline Volume pill: icon + horizontal slider + percentage.
+		local vol_slider_w = is_narrow and 80 or 110
+		local vol_pct_w = VOL_PCT_SLOT_W
+		local vol_block_w = btn_w + 8 + vol_slider_w + vol_pct_w
+		local vol_block_x = cx
+		local vol_block_rect_pre = {ax = cx, ay = btn_row_y, bx = cx + vol_block_w, by = btn_row_y + btn_h}
+		local vol_block_hover = get_point_to_rectangle_proximity(cursor, vol_block_rect_pre) == 0
+		draw_glass({ x = cx, y = btn_row_y, w = vol_block_w, h = btn_h, r = btn_h / 2, intensity = lg.intensity * 0.9, show_frost = lg.show_frost, shadow_blur = 20 })
+		vol_icon_rect = {ax = cx, ay = btn_row_y, bx = cx + btn_w, by = btn_row_y + btn_h}
+		local vol_icon_hover = get_point_to_rectangle_proximity(cursor, vol_icon_rect) == 0
+		local vol_icon = 'volume_up'
+		if state.mute then vol_icon = 'volume_off'
+		elseif (state.volume or 0) <= 0 then vol_icon = 'volume_mute'
+		elseif (state.volume or 0) <= 60 then vol_icon = 'volume_down'
+		end
+		emit_centered_icon(vol_icon, cx, btn_row_y, btn_w, btn_h, nil, vol_icon_hover or vol_block_hover)
+		vs_ax = cx + btn_w + 8
+		vs_bx = cx + btn_w + 8 + vol_slider_w
+		local vs_h = 8
+		local vs_y = btn_row_y + (btn_h - vs_h) / 2
+		emit_pill(vs_ax, vs_y, vs_bx, vs_h, 'FFFFFF', '&H80&')
+		local vol_frac = math.min((state.volume or 0) / (state.volume_max or 100), 1)
+		if vol_frac < 0 then vol_frac = 0 end
+		vol_fill_w = vs_bx - vs_ax
+		local vol_filled_x = vs_ax + math.floor(vol_fill_w * vol_frac)
+		if vol_filled_x > vs_ax + vs_h then
+			emit_pill(vs_ax, vs_y, vol_filled_x, vs_h, 'FFFFFF', '&H20&')
+		end
+		local vol_pct_text = tostring(math.floor((state.volume or 0) + 0.5)) .. ' %'
+		local vol_pct_center_x = (vs_bx + cx + vol_block_w) / 2
+		draw_text_label(vol_pct_text, vol_pct_center_x, btn_row_y + btn_h / 2, VOL_PCT_FS, vol_block_hover)
+		vol_slider_rect = {ax = vs_ax, ay = btn_row_y, bx = vs_bx, by = btn_row_y + btn_h}
+		local vol_block_rect = {ax = vol_block_x, ay = btn_row_y, bx = vol_block_x + vol_block_w, by = btn_row_y + btn_h}
+		self._lg_vol_block_rect = vol_block_rect
+		cx = cx + vol_block_w + block_gap
 	end
-	emit_centered_icon(vol_icon, cx, btn_row_y, btn_w, btn_h, nil, vol_icon_hover or vol_block_hover)
-	local vs_ax = cx + btn_w + 8
-	local vs_bx = cx + btn_w + 8 + vol_slider_w
-	local vs_h = 8
-	local vs_y = btn_row_y + (btn_h - vs_h) / 2
-	emit_pill(vs_ax, vs_y, vs_bx, vs_h, 'FFFFFF', '&H80&')
-	local vol_frac = math.min((state.volume or 0) / (state.volume_max or 100), 1)
-	if vol_frac < 0 then vol_frac = 0 end
-	local vol_fill_w = vs_bx - vs_ax
-	local vol_filled_x = vs_ax + math.floor(vol_fill_w * vol_frac)
-	if vol_filled_x > vs_ax + vs_h then
-		emit_pill(vs_ax, vs_y, vol_filled_x, vs_h, 'FFFFFF', '&H20&')
-	end
-	-- Volume percentage text (centered between slider end and block end).
-	local vol_pct_text = tostring(math.floor((state.volume or 0) + 0.5)) .. ' %'
-	local vol_pct_center_x = (vs_bx + cx + vol_block_w) / 2
-	draw_text_label(vol_pct_text, vol_pct_center_x, btn_row_y + btn_h / 2, VOL_PCT_FS, vol_block_hover)
-	local vol_slider_rect = {ax = vs_ax, ay = btn_row_y, bx = vs_bx, by = btn_row_y + btn_h}
-	local vol_block_rect = {ax = vol_block_x, ay = btn_row_y, bx = vol_block_x + vol_block_w, by = btn_row_y + btn_h}
-	self._lg_vol_block_rect = vol_block_rect
-	cx = cx + vol_block_w + block_gap
 
-	-- Right-side buttons. On narrow screens, use row 2.
+	-- Right-side buttons. On narrow screens, use row 2. Portrait keeps only
+	-- Fullscreen + Settings on the same row — Subtitle/Audio/Info/Playlist
+	-- still reachable via the settings menu and input.conf bindings.
 	local rrow_y = is_narrow and (self.by - btn_h - 2) or btn_row_y
 	local rx = area_bx
 	local rbtn = btn_w + 6
 
-	-- Fullscreen
+	-- Fullscreen (always visible).
 	rx = rx - rbtn
-	local fs_rect = {ax = rx, ay = rrow_y, bx = rx + rbtn, by = rrow_y + btn_h}
+	fs_rect = {ax = rx, ay = rrow_y, bx = rx + rbtn, by = rrow_y + btn_h}
 	local fs_hover = get_point_to_rectangle_proximity(cursor, fs_rect) == 0
 	draw_button(rx, rrow_y, rbtn, btn_h, state.fullscreen and 'fullscreen_exit' or 'fullscreen_enter', fs_hover)
 	rx = rx - btn_gap
 
-	-- Settings (3-dot menu).
+	-- Settings 3-dot menu (always visible — in portrait this is the only
+	-- way to reach subtitle/audio/playlist pickers).
 	rx = rx - rbtn
-	local settings_rect = {ax = rx, ay = rrow_y, bx = rx + rbtn, by = rrow_y + btn_h}
+	settings_rect = {ax = rx, ay = rrow_y, bx = rx + rbtn, by = rrow_y + btn_h}
 	local settings_hover = get_point_to_rectangle_proximity(cursor, settings_rect) == 0
 	draw_button(rx, rrow_y, rbtn, btn_h, 'settings', settings_hover)
 	rx = rx - btn_gap
 
-	-- Subtitle: render the SVG icon now (was "CC" text).
-	local sub_w = rbtn
-	rx = rx - sub_w
-	local sub_rect = {ax = rx, ay = rrow_y, bx = rx + sub_w, by = rrow_y + btn_h}
-	local sub_hover = get_point_to_rectangle_proximity(cursor, sub_rect) == 0
-	draw_button(rx, rrow_y, sub_w, btn_h, 'subtitle', sub_hover)
-	rx = rx - btn_gap
+	if not is_portrait then
+		-- Subtitle: render the SVG icon now (was "CC" text).
+		local sub_w = rbtn
+		rx = rx - sub_w
+		sub_rect = {ax = rx, ay = rrow_y, bx = rx + sub_w, by = rrow_y + btn_h}
+		local sub_hover = get_point_to_rectangle_proximity(cursor, sub_rect) == 0
+		draw_button(rx, rrow_y, sub_w, btn_h, 'subtitle', sub_hover)
+		rx = rx - btn_gap
 
-	-- Audio (musical-track-list svg).
-	local audio_w = rbtn
-	rx = rx - audio_w
-	local audio_rect = {ax = rx, ay = rrow_y, bx = rx + audio_w, by = rrow_y + btn_h}
-	local audio_hover = get_point_to_rectangle_proximity(cursor, audio_rect) == 0
-	draw_button(rx, rrow_y, audio_w, btn_h, 'audio_track', audio_hover)
-	rx = rx - btn_gap
+		-- Audio (musical-track-list svg).
+		local audio_w = rbtn
+		rx = rx - audio_w
+		audio_rect = {ax = rx, ay = rrow_y, bx = rx + audio_w, by = rrow_y + btn_h}
+		local audio_hover = get_point_to_rectangle_proximity(cursor, audio_rect) == 0
+		draw_button(rx, rrow_y, audio_w, btn_h, 'audio_track', audio_hover)
+		rx = rx - btn_gap
 
-	-- Info: opens mpv stats overlay (#3). Sits between audio and playlist.
-	local info_w = btn_h
-	rx = rx - info_w
-	local info_rect = {ax = rx, ay = rrow_y, bx = rx + info_w, by = rrow_y + btn_h}
-	local info_hover = get_point_to_rectangle_proximity(cursor, info_rect) == 0
-	draw_button(rx, rrow_y, info_w, btn_h, 'info', info_hover)
-	rx = rx - btn_gap
+		-- Info: opens mpv stats overlay.
+		local info_w = btn_h
+		rx = rx - info_w
+		info_rect = {ax = rx, ay = rrow_y, bx = rx + info_w, by = rrow_y + btn_h}
+		local info_hover = get_point_to_rectangle_proximity(cursor, info_rect) == 0
+		draw_button(rx, rrow_y, info_w, btn_h, 'info', info_hover)
+		rx = rx - btn_gap
 
-	-- Playlist (with play marker).
-	local pl_w = btn_h
-	rx = rx - pl_w
-	local playlist_rect = {ax = rx, ay = rrow_y, bx = rx + pl_w, by = rrow_y + btn_h}
-	local playlist_hover = get_point_to_rectangle_proximity(cursor, playlist_rect) == 0
-	draw_button(rx, rrow_y, pl_w, btn_h, 'playlist_play', playlist_hover)
+		-- Playlist (with play marker).
+		local pl_w = btn_h
+		rx = rx - pl_w
+		playlist_rect = {ax = rx, ay = rrow_y, bx = rx + pl_w, by = rrow_y + btn_h}
+		local playlist_hover = get_point_to_rectangle_proximity(cursor, playlist_rect) == 0
+		draw_button(rx, rrow_y, pl_w, btn_h, 'playlist_play', playlist_hover)
+	end
+
+	-- Portrait mode intentionally renders no volume control here — there's
+	-- not enough room without crowding the row, and mpv's wheel-on-video
+	-- binding plus the global volume hotkeys still work. Volume can also be
+	-- reached through the Settings menu.
 
 	-- ==================== 3. INTERACTIVITY ====================
 	if cursor and cursor.zone then
 		cursor:zone('primary_down', play_rect, function() mp.commandv('cycle', 'pause') end)
 		cursor:zone('primary_down', prev_rect, function() mp.command('playlist-prev') end)
 		cursor:zone('primary_down', next_rect, function() mp.command('playlist-next') end)
-		cursor:zone('primary_down', speed_rect, function()
-			local speeds = {0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0}
-			local items = {}
-			for _, s in ipairs(speeds) do
-				local label = (s == 1.0) and 'Normal' or string.format('%.2gx', s)
-				local active = math.abs((state.speed or 1) - s) < 0.01
-				items[#items + 1] = {title = label, value = 'set speed ' .. s, active = active}
-			end
-			mp.commandv('script-message-to', 'uosc', 'open-menu', require('mp.utils').format_json({
-				type = 'lg_speed', title = 'Speed', items = items
-			}))
-		end)
-		cursor:zone('primary_down', quality_rect, function()
-			local path = mp.get_property('path', '')
-			local is_stream = path:match('^https?://') or path:match('^ytdl://')
-			if is_stream then
-				mp.command('script-binding uosc/stream-quality')
-			else
-				local vw = mp.get_property_number('video-params/w', 0)
-				local vh = mp.get_property_number('video-params/h', 0)
-				local codec = mp.get_property('video-codec', '?')
-				local fps = mp.get_property_number('container-fps', 0)
-				local fps_str = fps > 0 and string.format('%.1f fps', fps) or ''
-				local br = mp.get_property_number('video-bitrate', 0)
-				local br_str = br > 0 and string.format('%.1f Mbps', br / 1000000) or ''
-				local info = string.format('%dx%d  %s  %s  %s', vw, vh, codec, fps_str, br_str)
+		if speed_rect then
+			cursor:zone('primary_down', speed_rect, function()
+				local speeds = {0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0}
+				local items = {}
+				for _, s in ipairs(speeds) do
+					local label = (s == 1.0) and 'Normal' or string.format('%.2gx', s)
+					local active = math.abs((state.speed or 1) - s) < 0.01
+					items[#items + 1] = {title = label, value = 'set speed ' .. s, active = active}
+				end
 				mp.commandv('script-message-to', 'uosc', 'open-menu', require('mp.utils').format_json({
-					type = 'lg_quality', title = 'Video Quality',
-					items = {{title = info, value = '', active = true}}
+					type = 'lg_speed', title = 'Speed', items = items
 				}))
-			end
-		end)
-		cursor:zone('primary_down', vol_icon_rect, function() mp.commandv('cycle', 'mute') end)
-		cursor:zone('primary_down', vol_slider_rect, function()
-			local frac = (cursor.x - vs_ax) / vol_fill_w
-			if frac < 0 then frac = 0 elseif frac > 1 then frac = 1 end
-			mp.commandv('set', 'volume', math.floor(frac * (state.volume_max or 100)))
-		end)
+			end)
+		end
+		if quality_rect then
+			cursor:zone('primary_down', quality_rect, function()
+				local path = mp.get_property('path', '')
+				local is_stream = path:match('^https?://') or path:match('^ytdl://')
+				if is_stream then
+					mp.command('script-binding uosc/stream-quality')
+				else
+					local vw = mp.get_property_number('video-params/w', 0)
+					local vh = mp.get_property_number('video-params/h', 0)
+					local codec = mp.get_property('video-codec', '?')
+					local fps = mp.get_property_number('container-fps', 0)
+					local fps_str = fps > 0 and string.format('%.1f fps', fps) or ''
+					local br = mp.get_property_number('video-bitrate', 0)
+					local br_str = br > 0 and string.format('%.1f Mbps', br / 1000000) or ''
+					local info = string.format('%dx%d  %s  %s  %s', vw, vh, codec, fps_str, br_str)
+					mp.commandv('script-message-to', 'uosc', 'open-menu', require('mp.utils').format_json({
+						type = 'lg_quality', title = 'Video Quality',
+						items = {{title = info, value = '', active = true}}
+					}))
+				end
+			end)
+		end
+		if vol_icon_rect then
+			cursor:zone('primary_down', vol_icon_rect, function() mp.commandv('cycle', 'mute') end)
+		end
+		if vol_slider_rect then
+			cursor:zone('primary_down', vol_slider_rect, function()
+				local frac = (cursor.x - vs_ax) / vol_fill_w
+				if frac < 0 then frac = 0 elseif frac > 1 then frac = 1 end
+				mp.commandv('set', 'volume', math.floor(frac * (state.volume_max or 100)))
+			end)
+		end
 
 		-- All scroll handling is routed through input.conf → lg-scroll-up/down
 		-- script messages (global handler below). No cursor:zone wheel
@@ -1069,14 +1111,24 @@ function Controls:render()
 		self._lg_seek_handler = seek_to_cursor
 
 		cursor:zone('primary_down', fs_rect, function() mp.commandv('cycle', 'fullscreen') end)
-		cursor:zone('primary_down', settings_rect, function() mp.command('script-binding uosc/menu') end)
-		cursor:zone('primary_down', sub_rect, function() mp.command('script-binding uosc/subtitles') end)
-		cursor:zone('primary_down', audio_rect, function() mp.command('script-binding uosc/audio') end)
-		cursor:zone('primary_down', info_rect, function()
-			-- Toggle mpv's built-in stats overlay; gives codec/fps/bitrate/etc.
-			mp.command('script-binding stats/display-stats-toggle')
-		end)
-		cursor:zone('primary_down', playlist_rect, function() mp.command('script-binding uosc/items') end)
+		if settings_rect then
+			cursor:zone('primary_down', settings_rect, function() mp.command('script-binding uosc/menu') end)
+		end
+		if sub_rect then
+			cursor:zone('primary_down', sub_rect, function() mp.command('script-binding uosc/subtitles') end)
+		end
+		if audio_rect then
+			cursor:zone('primary_down', audio_rect, function() mp.command('script-binding uosc/audio') end)
+		end
+		if info_rect then
+			cursor:zone('primary_down', info_rect, function()
+				-- Toggle mpv's built-in stats overlay; gives codec/fps/bitrate/etc.
+				mp.command('script-binding stats/display-stats-toggle')
+			end)
+		end
+		if playlist_rect then
+			cursor:zone('primary_down', playlist_rect, function() mp.command('script-binding uosc/items') end)
+		end
 	end
 
 	-- ==================== 4. CENTERED OSD OVERLAYS (macOS style) ====================
