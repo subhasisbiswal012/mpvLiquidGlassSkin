@@ -486,9 +486,78 @@ function Controls:render()
 		))
 	end
 
+	-- ===== Hover glow palette =====
+	-- Each control category lights up with its own colour on hover.
+	-- Tweak these to retint the player's personality.
+	local LG_GLOW_COLORS = {
+		play              = '34D399', pause             = '34D399', -- emerald
+		prev              = '60A5FA', ['next']          = '60A5FA', -- sky blue
+		speed             = 'A78BFA',                               -- violet
+		quality           = 'F472B6',                               -- pink
+		volume            = '38BDF8',                               -- cyan blue
+		subtitle          = 'FBBF24',                               -- amber
+		audio             = 'FB923C',                               -- orange
+		fullscreen_enter  = '2DD4BF', fullscreen_exit  = '2DD4BF', -- teal
+		settings          = '94A3B8',                               -- slate
+		info              = '22D3EE',                               -- cyan
+		playlist          = 'C084FC',                               -- purple
+		time              = 'FBBF24',                               -- amber (matches subtitle)
+	}
+	-- How thick the colored halo is around a hovered pebble.
+	local LG_GLOW_PAD = 6   -- extra px on each side
+	local LG_GLOW_BLUR = 6  -- \be iterations for the soft edge
+	local LG_GLOW_ALPHA = '&H50&' -- &H00& = solid, &HFF& = invisible
+
+	-- Helper: rounded pill with box-blur softening, used for the hover halo.
+	local function emit_glow_pill(px1, py, px2, ph, color_bgr, alpha_byte_str, blur_iters)
+		local pw = px2 - px1
+		if pw < ph then return end
+		local pr = ph / 2
+		local k = pr * 0.5523
+		local x1, x2 = px1, px2
+		local y1, y2 = py, py + ph
+		ass:new_event()
+		ass:append(string.format(
+			'{\\an7\\pos(0,0)\\bord0\\shad0\\1c&H%s&\\1a%s\\be%d\\p1}'
+			.. 'm %.1f %.1f l %.1f %.1f '
+			.. 'b %.1f %.1f %.1f %.1f %.1f %.1f '
+			.. 'l %.1f %.1f '
+			.. 'b %.1f %.1f %.1f %.1f %.1f %.1f '
+			.. 'l %.1f %.1f '
+			.. 'b %.1f %.1f %.1f %.1f %.1f %.1f '
+			.. 'l %.1f %.1f '
+			.. 'b %.1f %.1f %.1f %.1f %.1f %.1f'
+			.. '{\\p0}',
+			color_bgr, alpha_byte_str, blur_iters,
+			x1 + pr, y1,         x2 - pr, y1,
+			x2 - pr + k, y1,     x2, y1 + pr - k,     x2, y1 + pr,
+			x2, y2 - pr,
+			x2, y2 - pr + k,     x2 - pr + k, y2,     x2 - pr, y2,
+			x1 + pr, y2,
+			x1 + pr - k, y2,     x1, y2 - pr + k,     x1, y2 - pr,
+			x1, y1 + pr,
+			x1, y1 + pr - k,     x1 + pr - k, y1,     x1 + pr, y1
+		))
+	end
+
+	-- Draw the colored hover halo *behind* a pebble. Pass the slot name from
+	-- LG_GLOW_COLORS (e.g. 'play'). No-op if name unknown or not hovered.
+	local function draw_hover_glow(bx, by, bw, bh, slot, is_hovered)
+		if not is_hovered then return end
+		local color = LG_GLOW_COLORS[slot]
+		if not color then return end
+		local gx = bx - LG_GLOW_PAD
+		local gy = by - LG_GLOW_PAD
+		local gw = bw + LG_GLOW_PAD * 2
+		local gh = bh + LG_GLOW_PAD * 2
+		emit_glow_pill(gx, gy, gx + gw, gh, _lg_bgr(color), LG_GLOW_ALPHA, LG_GLOW_BLUR)
+	end
+
 	-- Helper: draw a glass button pebble with an icon centered inside.
 	-- icon_scale_factor overrides the default 0.60 when larger icons are needed.
-	local function draw_button(bx, by, bw, bh, icon_name, is_hovered, icon_scale_factor)
+	-- glow_slot (optional) keys into LG_GLOW_COLORS for the hover halo.
+	local function draw_button(bx, by, bw, bh, icon_name, is_hovered, icon_scale_factor, glow_slot)
+		draw_hover_glow(bx, by, bw, bh, glow_slot or icon_name, is_hovered)
 		local br = bh / 2
 		draw_glass({
 			x = bx, y = by, w = bw, h = bh, r = br,
@@ -510,7 +579,8 @@ function Controls:render()
 		end
 	end
 	-- Helper: draw a glass button with text label instead of an icon.
-	local function draw_text_button(bx, by, bw, bh, label, is_hovered, font_size)
+	local function draw_text_button(bx, by, bw, bh, label, is_hovered, font_size, glow_slot)
+		draw_hover_glow(bx, by, bw, bh, glow_slot, is_hovered)
 		draw_glass({
 			x = bx, y = by, w = bw, h = bh, r = bh / 2,
 			intensity = lg.intensity * (is_hovered and 1.2 or 1.0),
@@ -537,6 +607,36 @@ function Controls:render()
 	local progress_h = 16
 	local row_gap = 10
 
+	-- ===== TIME BLOCK SIZING (#5) =====
+	-- The "1:23 / 4:56   42 %" pill that sits to the right of the quality pill.
+	-- The block is FIXED width (does not grow with text) so it stays put as
+	-- duration ticks across new digits. Bump TIME_BLOCK_FS to make the text
+	-- bigger; bump TIME_BLOCK_W to make the surrounding pebble wider; tweak
+	-- TIME_TEXT_GAP to control the visual spacing between time and "%".
+	local TIME_BLOCK_FS_WIDE   = 28   -- font size on a normal-width player
+	local TIME_BLOCK_FS_NARROW = 18   -- font size on a portrait/vertical player
+	local TIME_BLOCK_W_WIDE    = 320  -- fixed pill width on normal-width player
+	local TIME_BLOCK_W_NARROW  = 200  -- fixed pill width on a narrow player
+	local TIME_TEXT_GAP        = '  ' -- spacing between "X / Y" and "Z %"
+
+	-- ===== QUALITY BLOCK SIZING (#6) =====
+	-- The "HD / 1080p / 4K" pill. Fixed width so the layout doesn't reflow
+	-- when a different resolution shows up.
+	local QUALITY_FS_WIDE      = 24   -- font size on a normal-width player
+	local QUALITY_FS_NARROW    = 18   -- font size on a narrow player
+	local QUALITY_W_WIDE       = 90   -- fixed pill width on normal-width player
+	local QUALITY_W_NARROW     = 64   -- fixed pill width on a narrow player
+
+	-- ===== VOLUME PERCENT SIZING (inside the volume pill) =====
+	local VOL_PCT_FS           = 22   -- was 18 — match the new time/quality scale
+	local VOL_PCT_SLOT_W       = 64   -- horizontal slot reserved for "100 %"
+
+	-- ===== FILENAME LABEL (#4) =====
+	-- Shown left-aligned just above the progress bar while controls are visible.
+	local FILENAME_FS          = 15   -- font size
+	local FILENAME_GAP         = 6    -- vertical gap above the progress bar
+	local FILENAME_INSET       = 4    -- horizontal inset from the controls area edge
+
 	-- Responsive: detect if too narrow for single row (vertical/portrait video).
 	local is_narrow = area_w < 500
 	local btn_row_y, progress_y
@@ -548,6 +648,32 @@ function Controls:render()
 	else
 		btn_row_y = self.by - btn_h - 4
 		progress_y = btn_row_y - row_gap - progress_h
+	end
+
+	-- ==================== 0. FILENAME LABEL (#4) ====================
+	-- Sits above the progress bar, left-aligned, only while controls are showing.
+	do
+		local fname = mp.get_property('filename', '')
+		if fname and fname ~= '' then
+			-- Rough character-budget so we don't overflow the player width.
+			local avg_char_w = FILENAME_FS * 0.55
+			local max_chars = math.floor((area_w - FILENAME_INSET * 2) / avg_char_w)
+			local display_name = fname
+			if max_chars > 8 and #fname > max_chars then
+				display_name = fname:sub(1, max_chars - 1) .. '…'
+			end
+			-- ASS-escape braces / backslashes that would otherwise be parsed as tags.
+			display_name = display_name:gsub('\\', '\\\\'):gsub('{', '\\{'):gsub('}', '\\}')
+			ass:new_event()
+			ass:append(string.format(
+				'{\\an1\\pos(%d,%d)\\fnGeist\\fs%d\\b1\\bord1\\3c&H000000&\\3a&H40&\\shad0\\1c&H%s&}%s',
+				area_ax + FILENAME_INSET,
+				progress_y - FILENAME_GAP,
+				FILENAME_FS,
+				ink_bgr,
+				display_name
+			))
+		end
 	end
 
 	-- ==================== 1. PROGRESS BAR (full width, bigger + smoother) ====================
@@ -603,8 +729,11 @@ function Controls:render()
 	local play_scale = 1 + 0.06 * hover_t
 	local sw = btn_w * play_scale
 	local sh = btn_h * play_scale
+	local play_glow_x = cx - (sw - btn_w) / 2
+	local play_glow_y = btn_row_y - (sh - btn_h) / 2
+	draw_hover_glow(play_glow_x, play_glow_y, sw, sh, state.pause and 'play' or 'pause', is_play_hover)
 	draw_glass({
-		x = cx - (sw - btn_w) / 2, y = btn_row_y - (sh - btn_h) / 2, w = sw, h = sh, r = sh / 2,
+		x = play_glow_x, y = play_glow_y, w = sw, h = sh, r = sh / 2,
 		intensity = lg.intensity * (1 + 0.2 * hover_t), show_frost = lg.show_frost, shadow_blur = 20,
 	})
 	local play_icon = state.pause and 'play' or 'pause'
@@ -623,10 +752,15 @@ function Controls:render()
 	-- Prev + Next in one block.
 	local pn_btn = btn_w + 6
 	local pn_block_w = pn_btn * 2 + 2
-	draw_glass({ x = cx, y = btn_row_y, w = pn_block_w, h = btn_h, r = btn_h / 2, intensity = lg.intensity, show_frost = lg.show_frost, shadow_blur = 20 })
 	local prev_rect = {ax = cx, ay = btn_row_y, bx = cx + pn_btn, by = btn_row_y + btn_h}
 	local next_cx = cx + pn_btn + 2
 	local next_rect = {ax = next_cx, ay = btn_row_y, bx = next_cx + pn_btn, by = btn_row_y + btn_h}
+	local prev_hover = get_point_to_rectangle_proximity(cursor, prev_rect) == 0
+	local next_hover = get_point_to_rectangle_proximity(cursor, next_rect) == 0
+	-- Glow on whichever half is hovered (the block is shared glass, but halo follows the cursor).
+	if prev_hover then draw_hover_glow(cx, btn_row_y, pn_btn, btn_h, 'prev', true)
+	elseif next_hover then draw_hover_glow(next_cx, btn_row_y, pn_btn, btn_h, 'next', true) end
+	draw_glass({ x = cx, y = btn_row_y, w = pn_block_w, h = btn_h, r = btn_h / 2, intensity = lg.intensity * ((prev_hover or next_hover) and 1.15 or 1.0), show_frost = lg.show_frost, shadow_blur = 20 })
 	for _, idef in ipairs({{cx, pn_btn, 'prev'}, {next_cx, pn_btn, 'next'}}) do
 		local icon_path = liquid_icons_lib.get(idef[3])
 		if icon_path then
@@ -662,25 +796,29 @@ function Controls:render()
 	elseif vid_h >= 144 then quality_label = '144p'
 	elseif vid_h > 0 then quality_label = tostring(vid_h) .. 'p'
 	end
-	local quality_fs = is_narrow and 17 or 20
-	local quality_w = math.max(btn_w + 20, #quality_label * 12 + 24)
+	-- Apply fixed-width / scaled-font sizing from the constants block (#6).
+	local quality_fs = is_narrow and QUALITY_FS_NARROW or QUALITY_FS_WIDE
+	local quality_w  = is_narrow and QUALITY_W_NARROW  or QUALITY_W_WIDE
 	local quality_rect = {ax = cx, ay = btn_row_y, bx = cx + quality_w, by = btn_row_y + btn_h}
 	local quality_hover = get_point_to_rectangle_proximity(cursor, quality_rect) == 0
-	draw_text_button(cx, btn_row_y, quality_w, btn_h, quality_label, quality_hover, quality_fs)
+	draw_text_button(cx, btn_row_y, quality_w, btn_h, quality_label, quality_hover, quality_fs, 'quality')
 	cx = cx + quality_w + block_gap
 
-	-- Time + percentage in one block.
+	-- Time + percentage in one block (#5).
 	local time_str = string.format('%s / %s',
 		_lg_format_time(state.time or 0),
 		_lg_format_time(state.duration or 0))
 	local pct = math.floor(progress * 100)
-	local time_display = time_str .. '   ' .. pct .. ' %'
-	local time_fs = is_narrow and 17 or 22
-	local time_block_w = is_narrow and math.max(150, #time_display * 10 + 20) or math.max(260, #time_display * 13 + 24)
-	draw_glass({ x = cx, y = btn_row_y, w = time_block_w, h = btn_h, r = btn_h / 2, intensity = lg.intensity * 0.9, show_frost = lg.show_frost, shadow_blur = 20 })
+	local time_display = time_str .. TIME_TEXT_GAP .. pct .. ' %'
+	local time_fs      = is_narrow and TIME_BLOCK_FS_NARROW or TIME_BLOCK_FS_WIDE
+	local time_block_w = is_narrow and TIME_BLOCK_W_NARROW  or TIME_BLOCK_W_WIDE
+	local time_rect    = {ax = cx, ay = btn_row_y, bx = cx + time_block_w, by = btn_row_y + btn_h}
+	local time_hover   = get_point_to_rectangle_proximity(cursor, time_rect) == 0
+	draw_hover_glow(cx, btn_row_y, time_block_w, btn_h, 'time', time_hover)
+	draw_glass({ x = cx, y = btn_row_y, w = time_block_w, h = btn_h, r = btn_h / 2, intensity = lg.intensity * (time_hover and 1.05 or 0.9), show_frost = lg.show_frost, shadow_blur = 20 })
 	ass:new_event()
 	ass:append(string.format(
-		'{\\an5\\pos(%d,%d)\\fnGeist\\fs%d\\bord0\\shad0\\1c&H%s&}%s',
+		'{\\an5\\pos(%d,%d)\\fnGeist\\fs%d\\b1\\bord0\\shad0\\1c&H%s&}%s',
 		cx + time_block_w / 2, btn_row_y + btn_h / 2,
 		time_fs, ink_bgr, time_display
 	))
@@ -688,10 +826,13 @@ function Controls:render()
 
 	-- Volume icon + slider + percentage.
 	local vol_slider_w = is_narrow and 80 or 110
-	local vol_pct_w = 56
+	local vol_pct_w = VOL_PCT_SLOT_W
 	local vol_block_w = btn_w + 8 + vol_slider_w + vol_pct_w
 	local vol_block_x = cx
-	draw_glass({ x = cx, y = btn_row_y, w = vol_block_w, h = btn_h, r = btn_h / 2, intensity = lg.intensity * 0.9, show_frost = lg.show_frost, shadow_blur = 20 })
+	local vol_block_rect_pre = {ax = cx, ay = btn_row_y, bx = cx + vol_block_w, by = btn_row_y + btn_h}
+	local vol_block_hover = get_point_to_rectangle_proximity(cursor, vol_block_rect_pre) == 0
+	draw_hover_glow(cx, btn_row_y, vol_block_w, btn_h, 'volume', vol_block_hover)
+	draw_glass({ x = cx, y = btn_row_y, w = vol_block_w, h = btn_h, r = btn_h / 2, intensity = lg.intensity * (vol_block_hover and 1.05 or 0.9), show_frost = lg.show_frost, shadow_blur = 20 })
 	local vol_icon_rect = {ax = cx, ay = btn_row_y, bx = cx + btn_w, by = btn_row_y + btn_h}
 	local vol_icon = 'volume_up'
 	if state.mute then vol_icon = 'volume_off'
@@ -725,8 +866,8 @@ function Controls:render()
 	local vol_pct_center_x = (vs_bx + cx + vol_block_w) / 2
 	ass:new_event()
 	ass:append(string.format(
-		'{\\an5\\pos(%d,%d)\\fnGeist\\fs18\\bord0\\shad0\\1c&H%s&}%s',
-		vol_pct_center_x, btn_row_y + btn_h / 2, ink_bgr, vol_pct_text
+		'{\\an5\\pos(%d,%d)\\fnGeist\\fs%d\\b1\\bord0\\shad0\\1c&H%s&}%s',
+		vol_pct_center_x, btn_row_y + btn_h / 2, VOL_PCT_FS, ink_bgr, vol_pct_text
 	))
 	local vol_slider_rect = {ax = vs_ax, ay = btn_row_y, bx = vs_bx, by = btn_row_y + btn_h}
 	local vol_block_rect = {ax = vol_block_x, ay = btn_row_y, bx = vol_block_x + vol_block_w, by = btn_row_y + btn_h}
@@ -737,6 +878,28 @@ function Controls:render()
 	local rrow_y = is_narrow and (self.by - btn_h - 2) or btn_row_y
 	local rx = area_bx
 	local rbtn = btn_w + 6
+
+	-- Helper: draw an icon centered inside an already-painted pebble. Prefers a
+	-- liquid_icons (SVG-source) path, falls back to the Material Icons font glyph.
+	local function emit_centered_icon(slot_name, font_glyph, bx, by, bw, bh, scale_factor, font_size)
+		local icon_path = liquid_icons_lib.get(slot_name)
+		if icon_path then
+			local s = (bh * (scale_factor or 0.58)) / 24
+			ass:new_event()
+			ass:append(string.format(
+				'{\\an7\\pos(%d,%d)\\bord0\\shad0\\1c&H%s&\\1a&H10&\\fscx%d\\fscy%d\\p1}%s{\\p0}',
+				bx + (bw - 24 * s) / 2, by + (bh - 24 * s) / 2,
+				ink_bgr, s * 100, s * 100, icon_path
+			))
+		else
+			ass:new_event()
+			ass:append(string.format(
+				'{\\an5\\pos(%d,%d)\\fnMaterialIconsRound-Regular\\fs%d\\bord0\\shad0\\1c&H%s&}%s',
+				math.floor(bx + bw / 2), math.floor(by + bh / 2 + 1),
+				font_size or 24, ink_bgr, font_glyph
+			))
+		end
+	end
 
 	-- Fullscreen
 	rx = rx - rbtn
@@ -757,39 +920,46 @@ function Controls:render()
 	rx = rx - cc_w
 	local sub_rect = {ax = rx, ay = rrow_y, bx = rx + cc_w, by = rrow_y + btn_h}
 	local sub_hover = get_point_to_rectangle_proximity(cursor, sub_rect) == 0
-	draw_text_button(rx, rrow_y, cc_w, btn_h, 'CC', sub_hover, 20)
+	draw_text_button(rx, rrow_y, cc_w, btn_h, 'CC', sub_hover, 20, 'subtitle')
 	rx = rx - btn_gap
 
-	-- Audio: Material Icon headphones (since we have the font now)
+	-- Audio: headphones (SVG-preferred, Material Icons fallback)
 	local audio_w = rbtn + 4
 	rx = rx - audio_w
 	local audio_rect = {ax = rx, ay = rrow_y, bx = rx + audio_w, by = rrow_y + btn_h}
 	local audio_hover = get_point_to_rectangle_proximity(cursor, audio_rect) == 0
+	draw_hover_glow(rx, rrow_y, audio_w, btn_h, 'audio', audio_hover)
 	draw_glass({
 		x = rx, y = rrow_y, w = audio_w, h = btn_h, r = btn_h / 2,
 		intensity = lg.intensity * (audio_hover and 1.2 or 1.0), show_frost = lg.show_frost, shadow_blur = 20,
 	})
-	ass:new_event()
-	ass:append(string.format(
-		'{\\an5\\pos(%d,%d)\\fnMaterialIconsRound-Regular\\fs%d\\bord0\\shad0\\1c&H%s&}headphones',
-		math.floor(rx + audio_w / 2), math.floor(rrow_y + btn_h / 2 + 1), 24, ink_bgr
-	))
+	emit_centered_icon('headphones', 'headphones', rx, rrow_y, audio_w, btn_h, 0.62, 24)
 	rx = rx - btn_gap
 
-	-- Playlist: Material Icon playlist_play (centered)
+	-- Info: opens mpv stats overlay (#3). Sits between audio and playlist.
+	local info_w = btn_h
+	rx = rx - info_w
+	local info_rect = {ax = rx, ay = rrow_y, bx = rx + info_w, by = rrow_y + btn_h}
+	local info_hover = get_point_to_rectangle_proximity(cursor, info_rect) == 0
+	draw_hover_glow(rx, rrow_y, info_w, btn_h, 'info', info_hover)
+	draw_glass({
+		x = rx, y = rrow_y, w = info_w, h = btn_h, r = btn_h / 2,
+		intensity = lg.intensity * (info_hover and 1.2 or 1.0), show_frost = lg.show_frost, shadow_blur = 20,
+	})
+	emit_centered_icon('info', 'info', rx, rrow_y, info_w, btn_h, 0.62, 24)
+	rx = rx - btn_gap
+
+	-- Playlist: playlist_play (SVG-preferred, Material Icons fallback)
 	local pl_w = btn_h
 	rx = rx - pl_w
 	local playlist_rect = {ax = rx, ay = rrow_y, bx = rx + pl_w, by = rrow_y + btn_h}
 	local playlist_hover = get_point_to_rectangle_proximity(cursor, playlist_rect) == 0
+	draw_hover_glow(rx, rrow_y, pl_w, btn_h, 'playlist', playlist_hover)
 	draw_glass({
 		x = rx, y = rrow_y, w = pl_w, h = btn_h, r = btn_h / 2,
 		intensity = lg.intensity * (playlist_hover and 1.2 or 1.0), show_frost = lg.show_frost, shadow_blur = 20,
 	})
-	ass:new_event()
-	ass:append(string.format(
-		'{\\an5\\pos(%d,%d)\\fnMaterialIconsRound-Regular\\fs%d\\bord0\\shad0\\1c&H%s&}playlist_play',
-		math.floor(rx + pl_w / 2), math.floor(rrow_y + btn_h / 2 + 1), 26, ink_bgr
-	))
+	emit_centered_icon('playlist_play', 'playlist_play', rx, rrow_y, pl_w, btn_h, 0.66, 26)
 
 	-- ==================== 3. INTERACTIVITY ====================
 	if cursor and cursor.zone then
@@ -865,6 +1035,10 @@ function Controls:render()
 		cursor:zone('primary_down', settings_rect, function() mp.command('script-binding uosc/menu') end)
 		cursor:zone('primary_down', sub_rect, function() mp.command('script-binding uosc/subtitles') end)
 		cursor:zone('primary_down', audio_rect, function() mp.command('script-binding uosc/audio') end)
+		cursor:zone('primary_down', info_rect, function()
+			-- Toggle mpv's built-in stats overlay; gives codec/fps/bitrate/etc.
+			mp.command('script-binding stats/display-stats-toggle')
+		end)
 		cursor:zone('primary_down', playlist_rect, function() mp.command('script-binding uosc/items') end)
 	end
 

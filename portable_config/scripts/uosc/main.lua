@@ -153,6 +153,18 @@ local function lg_toggle_theme()
 end
 mp.register_script_message('liquid-glass-toggle-theme', lg_toggle_theme)
 mp.add_key_binding('Ctrl+t', 'liquid-glass-toggle-theme', lg_toggle_theme)
+
+-- Load SVG icon assets, overriding the inline ASS paths in lib/liquid/icons.lua.
+-- Missing assets folder is fine — icons.lua's defaults stay in effect.
+do
+    local ok, svg_loader = pcall(require, 'lib/liquid/svg_loader')
+    if ok and svg_loader and svg_loader.boot then
+        local boot_ok, err = pcall(svg_loader.boot)
+        if not boot_ok then
+            mp.msg.warn('liquid svg loader failed: ' .. tostring(err))
+        end
+    end
+end
 -- ===== /Liquid Glass skin =====
 -- Normalize values
 options.proximity_out = math.max(options.proximity_out, options.proximity_in + 1)

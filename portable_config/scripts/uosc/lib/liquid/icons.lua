@@ -111,6 +111,25 @@ local SPEED =
   'l 17 18 b 17 12 15 8 12 8 b 9 8 7 12 7 18 l 4 18 ' ..
   'm 11 11 l 14 16 l 12 17 l 10 12 l 11 11'
 
+-- Info: filled circle with an "i" cut-out (dot + stem).
+local INFO =
+  'm 12 3 b 17 3 21 7 21 12 b 21 17 17 21 12 21 b 7 21 3 17 3 12 b 3 7 7 3 12 3 ' ..
+  'm 11 10.5 l 13 10.5 l 13 17 l 11 17 l 11 10.5 ' ..
+  'm 11 6.5 l 13 6.5 l 13 8.5 l 11 8.5 l 11 6.5'
+
+-- Headphones: top arc + two filled earcups.
+local HEADPHONES =
+  'm 4 13 b 4 5 20 5 20 13 l 19 13 b 19 7 5 7 5 13 l 4 13 ' ..
+  'm 4 13 l 8 13 l 8 19 l 4 19 l 4 13 ' ..
+  'm 16 13 l 20 13 l 20 19 l 16 19 l 16 13'
+
+-- Playlist with play marker: three lines on the left + filled triangle.
+local PLAYLIST_PLAY =
+  'm 3 6 l 13 6 l 13 8 l 3 8 l 3 6 ' ..
+  'm 3 10 l 13 10 l 13 12 l 3 12 l 3 10 ' ..
+  'm 3 14 l 9 14 l 9 16 l 3 16 l 3 14 ' ..
+  'm 14 11 l 21 16 l 14 21 l 14 11'
+
 local registry = {
   play   = PLAY,
   pause  = PAUSE,
@@ -137,6 +156,9 @@ local registry = {
   search            = SEARCH,
   expand_menu       = EXPAND_MENU,
   speed             = SPEED,
+  info              = INFO,
+  headphones        = HEADPHONES,
+  playlist_play     = PLAYLIST_PLAY,
 }
 
 function M.get(name) return registry[name] end
