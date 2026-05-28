@@ -1,0 +1,93 @@
+name: Release
+
+# Builds a clean end-user zip of portable_config/ and attaches it to a
+# GitHub Release. Triggers on a pushed tag like v1.0.0, or via the
+# Actions tab "Run workflow" button (with a manually supplied version).
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag to publish (e.g. v1.0.0). Must already exist as a git tag.'
+        required: true
+        type: string
+
+permissions:
+  contents: write  # required for softprops/action-gh-release to create the release
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Building release: ${VERSION}"
+
+      - name: Check out repo at tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.version.outputs.version }}
+
+      - name: Stage release tree
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          STAGE_DIR="release-stage/mpv-liquid-glass"
+          mkdir -p "$STAGE_DIR"
+
+          # Copy the contents of portable_config/ into the named folder so
+          # users see one tidy top-level folder when they unzip.
+          cp -r portable_config/. "$STAGE_DIR/"
+
+          # Drop a plain-text install guide alongside the folder contents
+          # for anyone who downloads the zip on its own.
+          cat > "$STAGE_DIR/INSTALL.txt" <<'EOF'
+          mpv Liquid Glass — Install
+          ==========================
+
+          1. Locate your mpv config directory:
+               Windows: %APPDATA%\mpv\
+               macOS:   ~/.config/mpv/
+               Linux:   ~/.config/mpv/
+             (Create the folder if it does not exist.)
+
+          2. Copy EVERYTHING inside this folder (scripts/, fonts/,
+             script-opts/, ...) into your mpv config directory.
+
+          3. Restart mpv. The Liquid Glass skin loads automatically.
+
+          Full docs, screenshots, and customisation knobs:
+            https://github.com/subhasisbiswal012/mpvLiquidGlassSkin
+          EOF
+
+      - name: Create zip
+        id: zip
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          ZIP_NAME="mpv-liquid-glass-${VERSION}.zip"
+          cd release-stage
+          zip -r "../${ZIP_NAME}" "mpv-liquid-glass"
+          cd ..
+          ls -lh "${ZIP_NAME}"
+          echo "zip_name=${ZIP_NAME}" >> "$GITHUB_OUTPUT"
+          echo "zip_path=${ZIP_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: ${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          files: ${{ steps.zip.outputs.zip_path }}
+          fail_on_unmatched_files: true

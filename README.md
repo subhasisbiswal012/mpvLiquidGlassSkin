@@ -115,11 +115,11 @@ Between the audio and playlist buttons on the right side. One click toggles mpv'
 
 > Three steps. No compile, no dependencies, no build tools. If you already have mpv installed, you're 30 seconds away from running the skin.
 
-### 1. Download the repo
+### 1. Download the release zip
 
-Either:
-- Click **Code → Download ZIP** on the GitHub page and unzip it, or
-- `git clone https://github.com/subhasisbiswal012/mpvLiquidGlassSkin.git`
+Grab the latest **`mpv-liquid-glass-vX.Y.Z.zip`** from the [Releases page](https://github.com/subhasisbiswal012/mpvLiquidGlassSkin/releases/latest) (~1 MB — contains only what mpv needs to run the skin, no docs / tests / screenshots) and unzip it. You'll get a single `mpv-liquid-glass/` folder.
+
+> **Prefer the full repo?** If you want tests, planning docs, and the asset sources too, `git clone https://github.com/subhasisbiswal012/mpvLiquidGlassSkin.git` instead — the skin lives under `portable_config/`.
 
 ### 2. Locate your mpv config directory
 
@@ -133,7 +133,7 @@ If the folder doesn't exist yet, create it.
 
 ### 3. Copy the skin in
 
-Copy the **contents** of this repo's `portable_config/` directory into your mpv config directory (the `scripts/`, `fonts/`, `script-opts/` folders should land alongside any existing `mpv.conf` you have).
+Copy the **contents** of the unzipped `mpv-liquid-glass/` folder (or this repo's `portable_config/` directory if you cloned) into your mpv config directory — the `scripts/`, `fonts/`, and `script-opts/` folders should land alongside any existing `mpv.conf` you have.
 
 ### 4. Restart mpv
 
