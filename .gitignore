@@ -29,6 +29,10 @@ luarocks/
 __pycache__/
 *.pyc
 .venv/
+.venv*/
+
+# Claude Code local state (memory, settings) — not for the public repo
+.claude/
 
 # mpv runtime
 watch_later/
