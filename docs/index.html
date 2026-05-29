@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>mpv Liquid Glass — A glass-styled skin for mpv</title>
+  <meta name="description" content="mpv Liquid Glass — a modern, frosted-glass skin for the mpv media player. Apple Liquid Glass design, spring animations, no build step. Free and open source." />
+  <meta name="theme-color" content="#0b0e14" />
+
+  <!-- Open Graph / social -->
+  <meta property="og:title" content="mpv Liquid Glass" />
+  <meta property="og:description" content="A frosted-glass skin for mpv. Apple Liquid Glass design, spring animations, copy-and-play install." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="assets/controls-bar.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <!-- Ambient background blobs -->
+  <div class="bg-ambient" aria-hidden="true">
+    <span class="blob blob--a"></span>
+    <span class="blob blob--b"></span>
+    <span class="blob blob--c"></span>
+  </div>
+
+  <!-- ───────────────────────── HEADER ───────────────────────── -->
+  <header class="site-header" id="top">
+    <div class="container nav">
+      <a class="brand" href="#top" aria-label="mpv Liquid Glass home">
+        <span class="brand__mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="26" height="26">
+            <defs>
+              <linearGradient id="lg-drop" x1="5" y1="3" x2="19" y2="21" gradientUnits="userSpaceOnUse">
+                <stop offset="0" stop-color="#ff9166" />
+                <stop offset="1" stop-color="#e8553a" />
+              </linearGradient>
+            </defs>
+            <path d="M12 2.4c.5.6 6.6 7 6.6 11.5a6.6 6.6 0 1 1-13.2 0C5.4 9.4 11.5 3 12 2.4Z" fill="url(#lg-drop)" />
+            <path d="M10.3 10.2v5.4l4.5-2.7z" fill="#fff" />
+            <path d="M8.7 8.8c-1 1.2-1.7 2.6-1.9 3.8" stroke="#fff" stroke-width="1.3" stroke-linecap="round" opacity="0.5" fill="none" />
+          </svg>
+        </span>
+        <span class="brand__name">mpv <strong>Liquid&nbsp;Glass</strong></span>
+      </a>
+
+      <nav class="nav__links" aria-label="Primary">
+        <a href="#demo">Demo</a>
+        <a href="#features">Features</a>
+        <a href="#screenshots">Screenshots</a>
+        <a href="#install">Install</a>
+      </nav>
+
+      <div class="nav__actions">
+        <button id="theme-toggle" class="icon-btn" type="button" aria-label="Switch to light theme" aria-pressed="false">
+          <svg class="icon-moon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+          <svg class="icon-sun" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.4M12 19.1v2.4M4.6 4.6l1.7 1.7M17.7 17.7l1.7 1.7M2.5 12h2.4M19.1 12h2.4M4.6 19.4l1.7-1.7M17.7 6.3l1.7-1.7"/></svg>
+        </button>
+        <a class="btn btn--ghost nav__github" href="https://github.com/subhasisbiswal012/mpvLiquidGlassSkin" target="_blank" rel="noopener">
+          <img class="avatar avatar--sm" src="https://github.com/subhasisbiswal012.png?size=48" width="22" height="22" alt="" loading="lazy" decoding="async" />
+          <span>GitHub</span>
+        </a>
+        <button id="nav-toggle" class="icon-btn nav__burger" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-menu">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+        </button>
+      </div>
+    </div>
+    <nav id="mobile-menu" class="mobile-menu" aria-label="Mobile" hidden>
+      <a href="#demo">Demo</a>
+      <a href="#features">Features</a>
+      <a href="#screenshots">Screenshots</a>
+      <a href="#install">Install</a>
+      <a href="https://github.com/subhasisbiswal012/mpvLiquidGlassSkin" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <!-- ───────────────────────── HERO ───────────────────────── -->
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero__media" aria-hidden="true">
+        <video id="hero-video" autoplay muted loop playsinline poster="assets/controls-bar.png">
+          <source src="assets/demo.mp4" type="video/mp4" />
+        </video>
+        <div class="hero__scrim"></div>
+      </div>
+
+      <div class="container hero__inner">
+        <p class="eyebrow reveal">
+          <span class="dot"></span> Built on uosc · Apple Liquid Glass design
+        </p>
+        <h1 id="hero-title" class="reveal">
+          Your <span class="grad">mpv</span> player,<br />dressed in <span class="grad">liquid glass.</span>
+        </h1>
+        <p class="hero__sub reveal">
+          A modern, frosted-glass skin for the mpv media player — springy animations,
+          real SVG icons, and a clean YouTube-style layout. Pure Lua. No build step.
+          <strong>Just copy and play.</strong>
+        </p>
+
+        <div class="hero__cta reveal">
+          <a id="download-btn" class="btn btn--primary btn--lg" href="https://github.com/subhasisbiswal012/mpvLiquidGlassSkin/releases/latest" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4.5 20.5h15"/></svg>
+            <span id="download-label">Download latest release</span>
+          </a>
+          <a class="btn btn--glass btn--lg" href="#install">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            Install guide
+          </a>
+        </div>
+
+        <ul class="hero__meta reveal" aria-label="Highlights">
+          <li><span id="release-version" class="pill">latest release</span></li>
+          <li>~1&nbsp;MB download</li>
+          <li>MIT licensed</li>
+          <li>Windows · macOS · Linux</li>
+        </ul>
+      </div>
+
+      <a class="hero__scroll" href="#demo" aria-label="Scroll to the demo">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </a>
+    </section>
+
+    <!-- ───────────────────────── DEMO ───────────────────────── -->
+    <section class="section demo" id="demo" aria-labelledby="demo-title">
+      <div class="container">
+        <header class="section__head reveal">
+          <p class="eyebrow eyebrow--center"><span class="dot"></span> Live demo</p>
+          <h2 id="demo-title">Watch it glide</h2>
+          <p class="section__lead">Frosted controls, spring motion, and the elastic speedometer — playing in real time.</p>
+        </header>
+
+        <figure class="demo__frame reveal">
+          <div class="demo__chrome" aria-hidden="true">
+            <span class="demo__dots"><i></i><i></i><i></i></span>
+            <span class="demo__title">
+              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M12 2.4c.5.6 6.6 7 6.6 11.5a6.6 6.6 0 1 1-13.2 0C5.4 9.4 11.5 3 12 2.4Z" fill="#e8553a"/><path d="M10.3 10.2v5.4l4.5-2.7z" fill="#fff"/></svg>
+              mpv — Liquid Glass
+            </span>
+          </div>
+          <video class="demo__video" id="demo-video" autoplay muted loop playsinline controls controlsList="nodownload noremoteplayback" preload="auto" poster="assets/controls-bar.png">
+            <source src="assets/demo.mp4" type="video/mp4" />
+            Your browser doesn't support embedded video. <a href="assets/demo.mp4">Download the demo</a>.
+          </video>
+        </figure>
+      </div>
+    </section>
+
+    <!-- ───────────────────────── FEATURES ───────────────────────── -->
+    <section class="section" id="features" aria-labelledby="features-title">
+      <div class="container">
+        <header class="section__head reveal">
+          <p class="eyebrow eyebrow--center"><span class="dot"></span> Features</p>
+          <h2 id="features-title">Every pixel, reimagined as glass</h2>
+          <p class="section__lead">The skin restyles the whole on-screen UI into frosted glass pebbles with spring motion and adaptive layouts.</p>
+        </header>
+
+        <ul class="feature-grid">
+          <li class="glass-card reveal">
+            <span class="feature-ic" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="14" width="18" height="4" rx="2"/><circle cx="8" cy="16" r="1.4" fill="currentColor" stroke="none"/><path d="M5 9h14M5 6h9"/></svg>
+            </span>
+            <h3>Full-width glass control bar</h3>
+            <p>A frosted progress bar with chapter markers and drag-scrubbing, plus a YouTube-style button row — all wrapped in blurred glass pebbles.</p>
+          </li>
+
+          <li class="glass-card reveal">
+            <span class="feature-ic" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16a8 8 0 1 1 16 0"/><path d="M12 16l4-4"/><circle cx="12" cy="16" r="1.4" fill="currentColor" stroke="none"/></svg>
+            </span>
+            <h3>Elastic speedometer</h3>
+            <p>Scroll the speed pebble and a circular gauge springs to life — the needle overshoots and settles like a real cluster, with gold tick flashes.</p>
+          </li>
+
+          <li class="glass-card reveal">
+            <span class="feature-ic" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v4h3l4 4V6L7 10z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg>
+            </span>
+            <h3>Volume &amp; seek OSDs</h3>
+            <p>Centered frosted HUDs pop up as you scroll — speaker + percentage for volume, a camera glyph and clean progress for ±5s seeking.</p>
+          </li>
+
+          <li class="glass-card reveal">
+            <span class="feature-ic" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.4 4.9 5.4.8-3.9 3.8.9 5.4L12 16.9 7.2 18l.9-5.4-3.9-3.8 5.4-.8z"/></svg>
+            </span>
+            <h3>Real SVG icon pipeline</h3>
+            <p>Every glyph is an actual <code>.svg</code> parsed into ASS at startup. Drop a file into <code>assets/icons/</code> and it's picked up on next launch.</p>
+          </li>
+
+          <li class="glass-card reveal">
+            <span class="feature-ic" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none"/></svg>
+            </span>
+            <h3>Dark &amp; light themes</h3>
+            <p>Glass tuned for dark video by default, with a lighter variant for bright content. Toggle instantly during playback with <kbd>Ctrl</kbd>+<kbd>T</kbd>.</p>
+          </li>
+
+          <li class="glass-card reveal">
+            <span class="feature-ic" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M11 18h2"/></svg>
+            </span>
+            <h3>Small-window &amp; portrait aware</h3>
+            <p>In narrow or reels-sized windows the bar reshapes itself — non-essential pebbles collapse first, the transport stays anchored, nothing overlaps.</p>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ───────────────────────── SCREENSHOTS ───────────────────────── -->
+    <section class="section section--alt" id="screenshots" aria-labelledby="shots-title">
+      <div class="container">
+        <header class="section__head reveal">
+          <p class="eyebrow eyebrow--center"><span class="dot"></span> Screenshots</p>
+          <h2 id="shots-title">See it in motion — and at rest</h2>
+          <p class="section__lead">Click any shot to view it full size.</p>
+        </header>
+
+        <ul class="gallery">
+          <li class="gallery__item gallery__item--wide reveal">
+            <button class="shot" type="button" data-full="assets/controls-bar.png" aria-label="Open full-size: full control bar">
+              <img src="assets/controls-bar.png" width="1231" height="720" loading="lazy" decoding="async" alt="Two-row control layout: full-width frosted progress bar above a YouTube-style button row." />
+              <span class="shot__cap">Full glass control bar</span>
+            </button>
+          </li>
+          <li class="gallery__item reveal">
+            <button class="shot" type="button" data-full="assets/speedometer.png" aria-label="Open full-size: speedometer OSD">
+              <img src="assets/speedometer.png" width="1919" height="1079" loading="lazy" decoding="async" alt="Speedometer OSD with an elastic needle, gold tick flash and glow at the center of the player." />
+              <span class="shot__cap">Elastic speedometer</span>
+            </button>
+          </li>
+          <li class="gallery__item reveal">
+            <button class="shot" type="button" data-full="assets/volume-osd.png" aria-label="Open full-size: volume OSD">
+              <img src="assets/volume-osd.png" width="1241" height="737" loading="lazy" decoding="async" alt="Centered volume OSD showing a speaker icon and the current volume percentage." />
+              <span class="shot__cap">Volume OSD</span>
+            </button>
+          </li>
+          <li class="gallery__item reveal">
+            <button class="shot" type="button" data-full="assets/seek-osd.png" aria-label="Open full-size: seek OSD">
+              <img src="assets/seek-osd.png" width="1241" height="733" loading="lazy" decoding="async" alt="Centered seek OSD with a video-camera glyph and a clean progress percentage." />
+              <span class="shot__cap">Seek OSD</span>
+            </button>
+          </li>
+          <li class="gallery__item gallery__item--tall reveal">
+            <button class="shot" type="button" data-full="assets/portrait-layout.png" aria-label="Open full-size: portrait layout">
+              <img src="assets/portrait-layout.png" width="546" height="1013" loading="lazy" decoding="async" alt="Adaptive control layout reshaped for a portrait, reels-sized window." />
+              <span class="shot__cap">Portrait-aware layout</span>
+            </button>
+          </li>
+          <li class="gallery__item gallery__item--wide reveal">
+            <button class="shot" type="button" data-full="assets/idle-screen.png" aria-label="Open full-size: idle screen">
+              <img src="assets/idle-screen.png" width="1579" height="769" loading="lazy" decoding="async" alt="Idle screen with the Chill Cat illustration and a friendly prompt to drop a file or URL." />
+              <span class="shot__cap">Idle screen</span>
+            </button>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ───────────────────────── INSTALL ───────────────────────── -->
+    <section class="section" id="install" aria-labelledby="install-title">
+      <div class="container">
+        <header class="section__head reveal">
+          <p class="eyebrow eyebrow--center"><span class="dot"></span> Install</p>
+          <h2 id="install-title">Running in under a minute</h2>
+          <p class="section__lead">No compiler, no dependencies, no build tools. If you already have mpv, you're 30 seconds away.</p>
+        </header>
+
+        <ol class="steps">
+          <li class="glass-card step reveal">
+            <span class="step__no">1</span>
+            <div class="step__content">
+              <h3>Download &amp; unzip the skin</h3>
+              <ol class="substeps">
+                <li>Click the button below to open the <strong>Releases</strong> page, then download the latest <code>mpv-liquid-glass-vX.Y.Z.zip</code> (about 1&nbsp;MB).</li>
+                <li>Find the downloaded <code>.zip</code> — usually in your <strong>Downloads</strong> folder.</li>
+                <li><strong>Windows:</strong> right-click the zip → <strong>Extract All…</strong> → <strong>Extract</strong>. <strong>macOS:</strong> just double-click it.</li>
+                <li>You'll get a folder named <code>mpv-liquid-glass</code>. Leave this window open — you'll copy from it in Step&nbsp;3.</li>
+              </ol>
+              <a id="download-btn-2" class="btn btn--primary" href="https://github.com/subhasisbiswal012/mpvLiquidGlassSkin/releases/latest" target="_blank" rel="noopener">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4.5 20.5h15"/></svg>
+                <span id="download-label-2">Get the release</span>
+              </a>
+            </div>
+          </li>
+
+          <li class="glass-card step reveal">
+            <span class="step__no">2</span>
+            <div class="step__content">
+              <h3>Open your mpv config folder</h3>
+              <p>This is the folder where mpv keeps its settings. Open it for your operating system — and if it doesn't exist yet, you'll create it.</p>
+
+              <div class="os-block">
+                <h4>
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M3 5.5 10.5 4.4v7.1H3zM11.5 4.2 21 3v8.5h-9.5zM3 12.5h7.5v7.1L3 18.5zM11.5 12.5H21V21l-9.5-1.3z"/></svg>
+                  Windows
+                </h4>
+                <ol class="substeps">
+                  <li>Press <kbd>Win</kbd> + <kbd>R</kbd> together to open the <strong>Run</strong> box.</li>
+                  <li>Type or paste <code id="path-win">%APPDATA%</code> <button class="copy-btn copy-btn--inline" type="button" data-copy-target="path-win" aria-label="Copy %APPDATA%"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button> and press <kbd>Enter</kbd>. File Explorer opens the <em>Roaming</em> folder.</li>
+                  <li>Look for a folder named <code>mpv</code> and double-click to open it.</li>
+                  <li><strong>No <code>mpv</code> folder there?</strong> Right-click an empty area → <strong>New → Folder</strong>, name it exactly <code>mpv</code>, then open it.</li>
+                </ol>
+              </div>
+
+              <div class="os-block">
+                <h4>
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M16 3.5c0 1.3-.5 2.4-1.3 3.2-.9.9-2 1.4-3 1.3-.1-1.2.5-2.4 1.2-3.1.9-.9 2.3-1.5 3.1-1.4zM18.7 17c-.5 1.1-.7 1.6-1.3 2.6-.9 1.4-2.1 3.1-3.6 3.1-1.3 0-1.7-.8-3.5-.8s-2.2.8-3.5.8c-1.5 0-2.7-1.6-3.6-3-2.4-3.8-2.7-8.3-1.2-10.7 1-1.7 2.7-2.7 4.3-2.7 1.6 0 2.6.9 3.9.9 1.3 0 2-.9 3.9-.9 1.4 0 2.9.8 3.9 2.1-3.4 1.9-2.9 6.8.5 8.3z"/></svg>
+                  macOS
+                </h4>
+                <ol class="substeps">
+                  <li>Open <strong>Finder</strong>, then press <kbd>Cmd</kbd> + <kbd>Shift</kbd> + <kbd>G</kbd> (or menu <strong>Go → Go to Folder…</strong>).</li>
+                  <li>Paste <code id="path-mac">~/.config/mpv/</code> <button class="copy-btn copy-btn--inline" type="button" data-copy-target="path-mac" aria-label="Copy macOS config path"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button> and press <kbd>Return</kbd>.</li>
+                  <li>If it doesn't exist, create the <code>.config</code> and <code>mpv</code> folders inside your home folder, then open <code>mpv</code>.</li>
+                </ol>
+              </div>
+
+              <div class="os-block">
+                <h4>
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 2c-1.6 0-2.7 1.4-2.7 3 0 .9.1 1.7.1 2.4 0 .6-.6 1.2-1.2 2-1 1.3-2.2 2.8-2.2 4.9 0 .6.1 1.1.3 1.6-.5.5-.8 1-.8 1.7 0 .5.2.9.2 1.3 0 .4-.3.7-.3 1.2 0 .9 1.1 1.4 2.6 1.6 1 .2 1.9.7 2.8.7s1.8-.5 2.8-.7c1.5-.2 2.6-.7 2.6-1.6 0-.5-.3-.8-.3-1.2 0-.4.2-.8.2-1.3 0-.7-.3-1.2-.8-1.7.2-.5.3-1 .3-1.6 0-2.1-1.2-3.6-2.2-4.9-.6-.8-1.2-1.4-1.2-2 0-.7.1-1.5.1-2.4 0-1.6-1.1-3-2.7-3z"/></svg>
+                  Linux
+                </h4>
+                <ol class="substeps">
+                  <li>Open your file manager or a terminal and go to <code id="path-linux">~/.config/mpv/</code> <button class="copy-btn copy-btn--inline" type="button" data-copy-target="path-linux" aria-label="Copy Linux config path"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>.</li>
+                  <li>If it's not there, create it — in a terminal run <code>mkdir -p ~/.config/mpv</code>.</li>
+                </ol>
+              </div>
+            </div>
+          </li>
+
+          <li class="glass-card step reveal">
+            <span class="step__no">3</span>
+            <div class="step__content">
+              <h3>Copy the skin in, then restart</h3>
+              <ol class="substeps">
+                <li>Go back to the unzipped <code>mpv-liquid-glass</code> folder from Step&nbsp;1 and open it.</li>
+                <li>Select <strong>everything inside</strong> it — the <code>scripts</code>, <code>fonts</code>, and <code>script-opts</code> folders. <br /><strong>Windows:</strong> click inside the folder, press <kbd>Ctrl</kbd> + <kbd>A</kbd> to select all, then <kbd>Ctrl</kbd> + <kbd>C</kbd> to copy. <br /><strong>macOS:</strong> use <kbd>Cmd</kbd> + <kbd>A</kbd> then <kbd>Cmd</kbd> + <kbd>C</kbd>.</li>
+                <li>Switch to your <code>mpv</code> config folder from Step&nbsp;2, click inside it, and paste with <kbd>Ctrl</kbd> + <kbd>V</kbd> (<kbd>Cmd</kbd> + <kbd>V</kbd> on macOS).</li>
+                <li>If Windows asks to merge or replace files, choose <strong>“Replace the files in the destination”</strong> / <strong>Merge</strong> — it's safe to keep any existing <code>mpv.conf</code>.</li>
+                <li>Fully close mpv and open it again. Play any video — the Liquid&nbsp;Glass skin loads automatically.</li>
+              </ol>
+              <p class="step__tip"><strong>Important:</strong> copy the folder's <em>contents</em> (the three folders), <strong>not</strong> the <code>mpv-liquid-glass</code> folder itself.</p>
+            </div>
+          </li>
+        </ol>
+
+        <div class="glass-card quicktest reveal">
+          <div>
+            <h3>Prefer to try it first?</h3>
+            <p>Run mpv against the bundled config without touching your existing setup:</p>
+          </div>
+          <div class="code-copy">
+            <code id="quicktest-cmd">mpv --config-dir=portable_config &lt;your-video&gt;</code>
+            <button class="copy-btn copy-btn--solid" type="button" data-copy-target="quicktest-cmd" aria-label="Copy quick-test command">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+              <span>Copy</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="glass-card star-note reveal">
+          <span class="feature-ic star-note__ic" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.6l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17.8 6.6 19.5l1-6.1L3.2 9.1l6.1-.9z"/></svg>
+          </span>
+          <div class="star-note__body">
+            <h3>On GitHub? Star the repo</h3>
+            <p>If you're a developer with a GitHub account, give the repo a star — it's the easiest way to follow future updates, new designs, and releases as they ship.</p>
+          </div>
+          <a class="btn btn--primary" href="https://github.com/subhasisbiswal012/mpvLiquidGlassSkin" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M12 2.6l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17.8 6.6 19.5l1-6.1L3.2 9.1l6.1-.9z"/></svg>
+            Star on GitHub
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────────────────── CONTRIBUTE ───────────────────────── -->
+    <section class="section section--alt" id="contribute" aria-labelledby="contribute-title">
+      <div class="container">
+        <div class="glass-card contribute reveal">
+          <span class="feature-ic" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7M8.4 6.6c4 .2 7.2 1.6 7.4 5"/></svg>
+          </span>
+          <div class="contribute__body">
+            <h2 id="contribute-title">Open source &amp; open to contributions</h2>
+            <p>This skin is free and open source — and very much a work in progress. <strong>Got an idea for a new feature? Suggest it.</strong> Hit a bug or a glitch? Report it. Just open an issue on GitHub — feature requests are just as welcome as bug reports — or send a pull request if you'd like to build it yourself.</p>
+            <div class="hero__cta">
+              <a class="btn btn--primary" href="https://github.com/subhasisbiswal012/mpvLiquidGlassSkin/issues/new?labels=enhancement&title=Feature%20request:%20" target="_blank" rel="noopener">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.8 10.6c.5.4.8 1 .8 1.7v.2h6v-.2c0-.7.3-1.3.8-1.7A6 6 0 0 0 12 3z"/></svg>
+                Suggest a feature
+              </a>
+              <a class="btn btn--glass" href="https://github.com/subhasisbiswal012/mpvLiquidGlassSkin/issues/new?labels=bug&title=Bug:%20" target="_blank" rel="noopener">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="6" width="8" height="12" rx="4"/><path d="M12 6V4M5 9l2 1M19 9l-2 1M4 14h3M17 14h3M6 19l2-1.5M18 19l-2-1.5"/></svg>
+                Report a bug
+              </a>
+              <a class="btn btn--glass" href="https://github.com/subhasisbiswal012/mpvLiquidGlassSkin/issues" target="_blank" rel="noopener">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.6"/></svg>
+                Browse open issues
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────────────────── FINAL CTA ───────────────────────── -->
+    <section class="section final-cta">
+      <div class="container">
+        <div class="glass-card final-cta__card reveal">
+          <h2>Make mpv beautiful.</h2>
+          <p>Free, open source, and a 30-second install. Give it a star if you like it.</p>
+          <div class="hero__cta">
+            <a id="download-btn-3" class="btn btn--primary btn--lg" href="https://github.com/subhasisbiswal012/mpvLiquidGlassSkin/releases/latest" target="_blank" rel="noopener">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4.5 20.5h15"/></svg>
+              <span id="download-label-3">Download latest release</span>
+            </a>
+            <a class="btn btn--glass btn--lg" href="https://github.com/subhasisbiswal012/mpvLiquidGlassSkin" target="_blank" rel="noopener">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 1.5A10.5 10.5 0 0 0 8.7 22c.52.1.71-.23.71-.5v-1.9c-2.9.63-3.52-1.24-3.52-1.24-.48-1.2-1.16-1.53-1.16-1.53-.95-.65.07-.64.07-.64 1.05.07 1.6 1.08 1.6 1.08.93 1.6 2.45 1.14 3.05.87.09-.68.37-1.14.66-1.4-2.32-.27-4.76-1.16-4.76-5.16 0-1.14.4-2.07 1.07-2.8-.11-.27-.47-1.34.1-2.8 0 0 .88-.28 2.88 1.07a9.9 9.9 0 0 1 5.24 0c2-1.35 2.87-1.07 2.87-1.07.57 1.46.21 2.53.1 2.8.67.73 1.07 1.66 1.07 2.8 0 4.01-2.45 4.89-4.78 5.15.38.33.71.97.71 1.96v2.9c0 .28.19.61.72.5A10.5 10.5 0 0 0 12 1.5z"/></svg>
+              Star on GitHub
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ───────────────────────── FOOTER ───────────────────────── -->
+  <footer class="site-footer">
+    <div class="container footer__grid">
+      <div>
+        <a class="brand" href="#top" aria-label="mpv Liquid Glass home">
+          <span class="brand__mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22">
+              <defs>
+                <linearGradient id="lg-drop-2" x1="5" y1="3" x2="19" y2="21" gradientUnits="userSpaceOnUse">
+                  <stop offset="0" stop-color="#ff9166" />
+                  <stop offset="1" stop-color="#e8553a" />
+                </linearGradient>
+              </defs>
+              <path d="M12 2.4c.5.6 6.6 7 6.6 11.5a6.6 6.6 0 1 1-13.2 0C5.4 9.4 11.5 3 12 2.4Z" fill="url(#lg-drop-2)" />
+              <path d="M10.3 10.2v5.4l4.5-2.7z" fill="#fff" />
+            </svg>
+          </span>
+          <span class="brand__name">mpv <strong>Liquid&nbsp;Glass</strong></span>
+        </a>
+        <p class="footer__tag">A frosted-glass skin for the mpv media player.</p>
+        <a class="footer__author" href="https://github.com/subhasisbiswal012" target="_blank" rel="noopener">
+          <img class="avatar" src="https://github.com/subhasisbiswal012.png?size=80" width="40" height="40" alt="Subhasis Biswal on GitHub" loading="lazy" decoding="async" />
+          <span>Created by <strong>Subhasis Biswal</strong><br /><span class="footer__author-sub">@subhasisbiswal012 on GitHub</span></span>
+        </a>
+      </div>
+      <nav class="footer__links" aria-label="Footer">
+        <a href="#features">Features</a>
+        <a href="#screenshots">Screenshots</a>
+        <a href="#install">Install</a>
+        <a href="https://github.com/subhasisbiswal012/mpvLiquidGlassSkin/releases/latest" target="_blank" rel="noopener">Releases</a>
+        <a href="https://github.com/subhasisbiswal012/mpvLiquidGlassSkin" target="_blank" rel="noopener">Source</a>
+      </nav>
+    </div>
+    <div class="container footer__legal">
+      <p>Built on <a href="https://github.com/tomasklaen/uosc" target="_blank" rel="noopener">uosc</a> (LGPL-2.1). Own code MIT licensed. Inspired by Apple's Liquid Glass.</p>
+    </div>
+  </footer>
+
+  <!-- ───────────────────────── LIGHTBOX ───────────────────────── -->
+  <div id="lightbox" class="lightbox" role="dialog" aria-modal="true" aria-label="Screenshot viewer" hidden>
+    <button class="lightbox__close" type="button" aria-label="Close viewer">
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <img id="lightbox-img" src="" alt="" />
+  </div>
+
+  <script src="app.js" defer></script>
+</body>
+</html>
