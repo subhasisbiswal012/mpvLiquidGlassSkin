@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800;900&display=swap" rel="stylesheet" />
+<style>
+  :root{--accent:#e8553a;--accent-2:#ff8a5b;--bg:#0a0d14;--text:#f4f6fb;--muted:#aab3c5;--faint:#7c8499;
+    --surface:rgba(255,255,255,.06);--border:rgba(255,255,255,.12);--glow:rgba(232,85,58,.35);}
+  *{margin:0;box-sizing:border-box}
+  html,body{width:1920px;height:1080px;background:var(--bg);font-family:Inter,sans-serif;color:var(--text);overflow:hidden}
+  .blob{position:absolute;border-radius:50%;filter:blur(90px);width:760px;height:760px;opacity:.8}
+  .b1{top:-180px;left:-160px;background:rgba(232,85,58,.42)}
+  .b2{bottom:-240px;right:-180px;background:rgba(80,120,255,.30)}
+  .wrap{position:relative;z-index:2;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 160px}
+  .badge{display:inline-flex;align-items:center;gap:18px;font-size:26px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--faint);padding:18px 34px;border:1px solid var(--border);border-radius:999px;background:var(--surface);backdrop-filter:blur(12px);margin-bottom:50px}
+  .play{width:120px;height:120px;border-radius:50%;display:grid;place-items:center;margin-bottom:44px;
+    background:linear-gradient(135deg,var(--accent),var(--accent-2));box-shadow:0 0 90px -10px var(--glow)}
+  .play::after{content:"";border-style:solid;border-width:26px 0 26px 44px;border-color:transparent transparent transparent #fff;margin-left:10px}
+  h1{font-size:104px;font-weight:900;letter-spacing:-.03em;line-height:1.04}
+  .grad{background:linear-gradient(100deg,var(--accent-2),var(--accent));-webkit-background-clip:text;background-clip:text;color:transparent}
+  p{font-size:36px;color:var(--muted);margin-top:30px;max-width:1200px;line-height:1.4}
+  .vig{position:absolute;inset:0;z-index:1;background:radial-gradient(120% 100% at 50% 50%,transparent 55%,rgba(0,0,0,.45))}
+</style></head>
+<body>
+  <div class="blob b1"></div><div class="blob b2"></div><div class="vig"></div>
+  <div class="wrap">
+    <div class="badge" id="badge">▶ Insert your recording</div>
+    <div class="play"></div>
+    <h1 id="title">Install <span class="grad">MPV</span></h1>
+    <p id="sub">Drop your screen recording here during editing.</p>
+  </div>
+  <script>
+    const q=new URLSearchParams(location.search);
+    if(q.get('badge'))document.getElementById('badge').textContent=q.get('badge');
+    if(q.get('title'))document.getElementById('title').innerHTML=q.get('title');
+    if(q.get('sub'))document.getElementById('sub').textContent=q.get('sub');
+  </script>
+</body></html>

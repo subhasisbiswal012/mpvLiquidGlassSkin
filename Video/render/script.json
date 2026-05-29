@@ -1,0 +1,19 @@
+{
+  "voice": "am_michael",
+  "speed": 1.10,
+  "pad": 0.6,
+  "lines": [
+    "This is MPV, the media player. But it's never looked like this. Frosted glass controls, spring animations, Apple's Liquid Glass design, completely free. Let me show you.",
+    "If you've ever opened a really big video and watched your player stutter, freeze, or just give up, you know the feeling.",
+    "I've used them all. VLC, KMPlayer, the usual players. And for everyday clips, they're perfectly fine.",
+    "But push them. A ten gigabyte movie, an eighteen gigabyte remux, and they start to lag and hang. In my experience, MPV just, didn't. It stayed buttery smooth, every single time.",
+    "Same story with big playlists. Hundreds of small clips queued up, and the others crawled. MPV handled it without breaking a sweat.",
+    "That's because MPV is lean, and GPU accelerated at its core. It spends its energy playing your video, not fighting it.",
+    "So MPV won me over on performance. There was just one problem. It always looked a little, plain. Not anymore.",
+    "This is MPV Liquid Glass, a skin built on top of you-osc. Pure Lua, no compiling, no extra software. If you can copy and paste a folder, you can install it. There are two parts. First we install MPV, then we drop the skin in.",
+    "And here's what you unlock. A full width glass progress bar with chapter markers, and every control just one glance away.",
+    "Scroll over the speed button, and an elastic speedometer springs to life.",
+    "It even reshapes itself for portrait and reels sized video. And hit Control T any time to switch to a clean light theme.",
+    "That's it. If this earned a spot in your setup, give the repo a star. Want a new feature, or found a bug? It's all on the page, and there's even a guide for contributors. The link is in the description. Thanks for watching."
+  ]
+}

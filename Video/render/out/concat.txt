@@ -1,0 +1,5 @@
+file 'hook.mp4'
+file 'segment_why.mp4'
+file 'placeholder_mpv.mp4'
+file 'placeholder_skin.mp4'
+file 'segment_features_outro.mp4'
