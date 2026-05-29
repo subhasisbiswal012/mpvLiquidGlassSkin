@@ -33,15 +33,23 @@
     <div class="container nav">
       <a class="brand" href="#top" aria-label="mpv Liquid Glass home">
         <span class="brand__mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="2.5" y="4.5" width="19" height="15" rx="4" />
-            <path d="M10 9.2v5.6l4.8-2.8z" fill="currentColor" stroke="none" />
+          <svg viewBox="0 0 24 24" width="26" height="26">
+            <defs>
+              <linearGradient id="lg-drop" x1="5" y1="3" x2="19" y2="21" gradientUnits="userSpaceOnUse">
+                <stop offset="0" stop-color="#ff9166" />
+                <stop offset="1" stop-color="#e8553a" />
+              </linearGradient>
+            </defs>
+            <path d="M12 2.4c.5.6 6.6 7 6.6 11.5a6.6 6.6 0 1 1-13.2 0C5.4 9.4 11.5 3 12 2.4Z" fill="url(#lg-drop)" />
+            <path d="M10.3 10.2v5.4l4.5-2.7z" fill="#fff" />
+            <path d="M8.7 8.8c-1 1.2-1.7 2.6-1.9 3.8" stroke="#fff" stroke-width="1.3" stroke-linecap="round" opacity="0.5" fill="none" />
           </svg>
         </span>
         <span class="brand__name">mpv <strong>Liquid&nbsp;Glass</strong></span>
       </a>
 
       <nav class="nav__links" aria-label="Primary">
+        <a href="#demo">Demo</a>
         <a href="#features">Features</a>
         <a href="#screenshots">Screenshots</a>
         <a href="#install">Install</a>
@@ -53,7 +61,7 @@
           <svg class="icon-sun" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.4M12 19.1v2.4M4.6 4.6l1.7 1.7M17.7 17.7l1.7 1.7M2.5 12h2.4M19.1 12h2.4M4.6 19.4l1.7-1.7M17.7 6.3l1.7-1.7"/></svg>
         </button>
         <a class="btn btn--ghost nav__github" href="https://github.com/subhasisbiswal012/mpvLiquidGlassSkin" target="_blank" rel="noopener">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M12 1.5A10.5 10.5 0 0 0 8.7 22c.52.1.71-.23.71-.5v-1.9c-2.9.63-3.52-1.24-3.52-1.24-.48-1.2-1.16-1.53-1.16-1.53-.95-.65.07-.64.07-.64 1.05.07 1.6 1.08 1.6 1.08.93 1.6 2.45 1.14 3.05.87.09-.68.37-1.14.66-1.4-2.32-.27-4.76-1.16-4.76-5.16 0-1.14.4-2.07 1.07-2.8-.11-.27-.47-1.34.1-2.8 0 0 .88-.28 2.88 1.07a9.9 9.9 0 0 1 5.24 0c2-1.35 2.87-1.07 2.87-1.07.57 1.46.21 2.53.1 2.8.67.73 1.07 1.66 1.07 2.8 0 4.01-2.45 4.89-4.78 5.15.38.33.71.97.71 1.96v2.9c0 .28.19.61.72.5A10.5 10.5 0 0 0 12 1.5z"/></svg>
+          <img class="avatar avatar--sm" src="https://github.com/subhasisbiswal012.png?size=48" width="22" height="22" alt="" loading="lazy" decoding="async" />
           <span>GitHub</span>
         </a>
         <button id="nav-toggle" class="icon-btn nav__burger" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-menu">
@@ -62,6 +70,7 @@
       </div>
     </div>
     <nav id="mobile-menu" class="mobile-menu" aria-label="Mobile" hidden>
+      <a href="#demo">Demo</a>
       <a href="#features">Features</a>
       <a href="#screenshots">Screenshots</a>
       <a href="#install">Install</a>
@@ -111,9 +120,34 @@
         </ul>
       </div>
 
-      <a class="hero__scroll" href="#features" aria-label="Scroll to features">
+      <a class="hero__scroll" href="#demo" aria-label="Scroll to the demo">
         <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
       </a>
+    </section>
+
+    <!-- ───────────────────────── DEMO ───────────────────────── -->
+    <section class="section demo" id="demo" aria-labelledby="demo-title">
+      <div class="container">
+        <header class="section__head reveal">
+          <p class="eyebrow eyebrow--center"><span class="dot"></span> Live demo</p>
+          <h2 id="demo-title">Watch it glide</h2>
+          <p class="section__lead">Frosted controls, spring motion, and the elastic speedometer — playing in real time.</p>
+        </header>
+
+        <figure class="demo__frame reveal">
+          <div class="demo__chrome" aria-hidden="true">
+            <span class="demo__dots"><i></i><i></i><i></i></span>
+            <span class="demo__title">
+              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M12 2.4c.5.6 6.6 7 6.6 11.5a6.6 6.6 0 1 1-13.2 0C5.4 9.4 11.5 3 12 2.4Z" fill="#e8553a"/><path d="M10.3 10.2v5.4l4.5-2.7z" fill="#fff"/></svg>
+              mpv — Liquid Glass
+            </span>
+          </div>
+          <video class="demo__video" id="demo-video" autoplay muted loop playsinline controls controlsList="nodownload noremoteplayback" preload="auto" poster="assets/controls-bar.png">
+            <source src="assets/demo.mp4" type="video/mp4" />
+            Your browser doesn't support embedded video. <a href="assets/demo.mp4">Download the demo</a>.
+          </video>
+        </figure>
+      </div>
     </section>
 
     <!-- ───────────────────────── FEATURES ───────────────────────── -->
@@ -239,47 +273,78 @@
         <ol class="steps">
           <li class="glass-card step reveal">
             <span class="step__no">1</span>
-            <h3>Download &amp; unzip</h3>
-            <p>Grab the latest release zip (~1&nbsp;MB) and unzip it — you'll get a single <code>mpv-liquid-glass/</code> folder.</p>
-            <a id="download-btn-2" class="btn btn--primary" href="https://github.com/subhasisbiswal012/mpvLiquidGlassSkin/releases/latest" target="_blank" rel="noopener">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4.5 20.5h15"/></svg>
-              <span id="download-label-2">Get the release</span>
-            </a>
+            <div class="step__content">
+              <h3>Download &amp; unzip the skin</h3>
+              <ol class="substeps">
+                <li>Click the button below to open the <strong>Releases</strong> page, then download the latest <code>mpv-liquid-glass-vX.Y.Z.zip</code> (about 1&nbsp;MB).</li>
+                <li>Find the downloaded <code>.zip</code> — usually in your <strong>Downloads</strong> folder.</li>
+                <li><strong>Windows:</strong> right-click the zip → <strong>Extract All…</strong> → <strong>Extract</strong>. <strong>macOS:</strong> just double-click it.</li>
+                <li>You'll get a folder named <code>mpv-liquid-glass</code>. Leave this window open — you'll copy from it in Step&nbsp;3.</li>
+              </ol>
+              <a id="download-btn-2" class="btn btn--primary" href="https://github.com/subhasisbiswal012/mpvLiquidGlassSkin/releases/latest" target="_blank" rel="noopener">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4.5 20.5h15"/></svg>
+                <span id="download-label-2">Get the release</span>
+              </a>
+            </div>
           </li>
 
           <li class="glass-card step reveal">
             <span class="step__no">2</span>
-            <h3>Find your mpv config folder</h3>
-            <p>Open the path for your OS (create it if it doesn't exist):</p>
-            <div class="path-list">
-              <div class="path-row">
-                <span class="os">Windows</span>
-                <code id="path-win">%APPDATA%\mpv\</code>
-                <button class="copy-btn" type="button" data-copy-target="path-win" aria-label="Copy Windows config path">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
-                </button>
+            <div class="step__content">
+              <h3>Open your mpv config folder</h3>
+              <p>This is the folder where mpv keeps its settings. Open it for your operating system — and if it doesn't exist yet, you'll create it.</p>
+
+              <div class="os-block">
+                <h4>
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M3 5.5 10.5 4.4v7.1H3zM11.5 4.2 21 3v8.5h-9.5zM3 12.5h7.5v7.1L3 18.5zM11.5 12.5H21V21l-9.5-1.3z"/></svg>
+                  Windows
+                </h4>
+                <ol class="substeps">
+                  <li>Press <kbd>Win</kbd> + <kbd>R</kbd> together to open the <strong>Run</strong> box.</li>
+                  <li>Type or paste <code id="path-win">%APPDATA%</code> <button class="copy-btn copy-btn--inline" type="button" data-copy-target="path-win" aria-label="Copy %APPDATA%"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button> and press <kbd>Enter</kbd>. File Explorer opens the <em>Roaming</em> folder.</li>
+                  <li>Look for a folder named <code>mpv</code> and double-click to open it.</li>
+                  <li><strong>No <code>mpv</code> folder there?</strong> Right-click an empty area → <strong>New → Folder</strong>, name it exactly <code>mpv</code>, then open it.</li>
+                </ol>
               </div>
-              <div class="path-row">
-                <span class="os">macOS</span>
-                <code id="path-mac">~/.config/mpv/</code>
-                <button class="copy-btn" type="button" data-copy-target="path-mac" aria-label="Copy macOS config path">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
-                </button>
+
+              <div class="os-block">
+                <h4>
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M16 3.5c0 1.3-.5 2.4-1.3 3.2-.9.9-2 1.4-3 1.3-.1-1.2.5-2.4 1.2-3.1.9-.9 2.3-1.5 3.1-1.4zM18.7 17c-.5 1.1-.7 1.6-1.3 2.6-.9 1.4-2.1 3.1-3.6 3.1-1.3 0-1.7-.8-3.5-.8s-2.2.8-3.5.8c-1.5 0-2.7-1.6-3.6-3-2.4-3.8-2.7-8.3-1.2-10.7 1-1.7 2.7-2.7 4.3-2.7 1.6 0 2.6.9 3.9.9 1.3 0 2-.9 3.9-.9 1.4 0 2.9.8 3.9 2.1-3.4 1.9-2.9 6.8.5 8.3z"/></svg>
+                  macOS
+                </h4>
+                <ol class="substeps">
+                  <li>Open <strong>Finder</strong>, then press <kbd>Cmd</kbd> + <kbd>Shift</kbd> + <kbd>G</kbd> (or menu <strong>Go → Go to Folder…</strong>).</li>
+                  <li>Paste <code id="path-mac">~/.config/mpv/</code> <button class="copy-btn copy-btn--inline" type="button" data-copy-target="path-mac" aria-label="Copy macOS config path"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button> and press <kbd>Return</kbd>.</li>
+                  <li>If it doesn't exist, create the <code>.config</code> and <code>mpv</code> folders inside your home folder, then open <code>mpv</code>.</li>
+                </ol>
               </div>
-              <div class="path-row">
-                <span class="os">Linux</span>
-                <code id="path-linux">~/.config/mpv/</code>
-                <button class="copy-btn" type="button" data-copy-target="path-linux" aria-label="Copy Linux config path">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
-                </button>
+
+              <div class="os-block">
+                <h4>
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 2c-1.6 0-2.7 1.4-2.7 3 0 .9.1 1.7.1 2.4 0 .6-.6 1.2-1.2 2-1 1.3-2.2 2.8-2.2 4.9 0 .6.1 1.1.3 1.6-.5.5-.8 1-.8 1.7 0 .5.2.9.2 1.3 0 .4-.3.7-.3 1.2 0 .9 1.1 1.4 2.6 1.6 1 .2 1.9.7 2.8.7s1.8-.5 2.8-.7c1.5-.2 2.6-.7 2.6-1.6 0-.5-.3-.8-.3-1.2 0-.4.2-.8.2-1.3 0-.7-.3-1.2-.8-1.7.2-.5.3-1 .3-1.6 0-2.1-1.2-3.6-2.2-4.9-.6-.8-1.2-1.4-1.2-2 0-.7.1-1.5.1-2.4 0-1.6-1.1-3-2.7-3z"/></svg>
+                  Linux
+                </h4>
+                <ol class="substeps">
+                  <li>Open your file manager or a terminal and go to <code id="path-linux">~/.config/mpv/</code> <button class="copy-btn copy-btn--inline" type="button" data-copy-target="path-linux" aria-label="Copy Linux config path"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>.</li>
+                  <li>If it's not there, create it — in a terminal run <code>mkdir -p ~/.config/mpv</code>.</li>
+                </ol>
               </div>
             </div>
           </li>
 
           <li class="glass-card step reveal">
             <span class="step__no">3</span>
-            <h3>Copy in &amp; restart</h3>
-            <p>Copy the <strong>contents</strong> of the unzipped folder (<code>scripts/</code>, <code>fonts/</code>, <code>script-opts/</code>) into that mpv folder, then restart mpv. The skin loads automatically.</p>
+            <div class="step__content">
+              <h3>Copy the skin in, then restart</h3>
+              <ol class="substeps">
+                <li>Go back to the unzipped <code>mpv-liquid-glass</code> folder from Step&nbsp;1 and open it.</li>
+                <li>Select <strong>everything inside</strong> it — the <code>scripts</code>, <code>fonts</code>, and <code>script-opts</code> folders. <br /><strong>Windows:</strong> click inside the folder, press <kbd>Ctrl</kbd> + <kbd>A</kbd> to select all, then <kbd>Ctrl</kbd> + <kbd>C</kbd> to copy. <br /><strong>macOS:</strong> use <kbd>Cmd</kbd> + <kbd>A</kbd> then <kbd>Cmd</kbd> + <kbd>C</kbd>.</li>
+                <li>Switch to your <code>mpv</code> config folder from Step&nbsp;2, click inside it, and paste with <kbd>Ctrl</kbd> + <kbd>V</kbd> (<kbd>Cmd</kbd> + <kbd>V</kbd> on macOS).</li>
+                <li>If Windows asks to merge or replace files, choose <strong>“Replace the files in the destination”</strong> / <strong>Merge</strong> — it's safe to keep any existing <code>mpv.conf</code>.</li>
+                <li>Fully close mpv and open it again. Play any video — the Liquid&nbsp;Glass skin loads automatically.</li>
+              </ol>
+              <p class="step__tip"><strong>Important:</strong> copy the folder's <em>contents</em> (the three folders), <strong>not</strong> the <code>mpv-liquid-glass</code> folder itself.</p>
+            </div>
           </li>
         </ol>
 
@@ -294,6 +359,49 @@
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
               <span>Copy</span>
             </button>
+          </div>
+        </div>
+
+        <div class="glass-card star-note reveal">
+          <span class="feature-ic star-note__ic" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.6l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17.8 6.6 19.5l1-6.1L3.2 9.1l6.1-.9z"/></svg>
+          </span>
+          <div class="star-note__body">
+            <h3>On GitHub? Star the repo</h3>
+            <p>If you're a developer with a GitHub account, give the repo a star — it's the easiest way to follow future updates, new designs, and releases as they ship.</p>
+          </div>
+          <a class="btn btn--primary" href="https://github.com/subhasisbiswal012/mpvLiquidGlassSkin" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M12 2.6l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17.8 6.6 19.5l1-6.1L3.2 9.1l6.1-.9z"/></svg>
+            Star on GitHub
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────────────────── CONTRIBUTE ───────────────────────── -->
+    <section class="section section--alt" id="contribute" aria-labelledby="contribute-title">
+      <div class="container">
+        <div class="glass-card contribute reveal">
+          <span class="feature-ic" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7M8.4 6.6c4 .2 7.2 1.6 7.4 5"/></svg>
+          </span>
+          <div class="contribute__body">
+            <h2 id="contribute-title">Open source &amp; open to contributions</h2>
+            <p>This skin is free and open source — and very much a work in progress. <strong>Got an idea for a new feature? Suggest it.</strong> Hit a bug or a glitch? Report it. Just open an issue on GitHub — feature requests are just as welcome as bug reports — or send a pull request if you'd like to build it yourself.</p>
+            <div class="hero__cta">
+              <a class="btn btn--primary" href="https://github.com/subhasisbiswal012/mpvLiquidGlassSkin/issues/new?labels=enhancement&title=Feature%20request:%20" target="_blank" rel="noopener">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.8 10.6c.5.4.8 1 .8 1.7v.2h6v-.2c0-.7.3-1.3.8-1.7A6 6 0 0 0 12 3z"/></svg>
+                Suggest a feature
+              </a>
+              <a class="btn btn--glass" href="https://github.com/subhasisbiswal012/mpvLiquidGlassSkin/issues/new?labels=bug&title=Bug:%20" target="_blank" rel="noopener">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="6" width="8" height="12" rx="4"/><path d="M12 6V4M5 9l2 1M19 9l-2 1M4 14h3M17 14h3M6 19l2-1.5M18 19l-2-1.5"/></svg>
+                Report a bug
+              </a>
+              <a class="btn btn--glass" href="https://github.com/subhasisbiswal012/mpvLiquidGlassSkin/issues" target="_blank" rel="noopener">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.6"/></svg>
+                Browse open issues
+              </a>
+            </div>
           </div>
         </div>
       </div>
@@ -326,11 +434,24 @@
       <div>
         <a class="brand" href="#top" aria-label="mpv Liquid Glass home">
           <span class="brand__mark" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4.5" width="19" height="15" rx="4"/><path d="M10 9.2v5.6l4.8-2.8z" fill="currentColor" stroke="none"/></svg>
+            <svg viewBox="0 0 24 24" width="22" height="22">
+              <defs>
+                <linearGradient id="lg-drop-2" x1="5" y1="3" x2="19" y2="21" gradientUnits="userSpaceOnUse">
+                  <stop offset="0" stop-color="#ff9166" />
+                  <stop offset="1" stop-color="#e8553a" />
+                </linearGradient>
+              </defs>
+              <path d="M12 2.4c.5.6 6.6 7 6.6 11.5a6.6 6.6 0 1 1-13.2 0C5.4 9.4 11.5 3 12 2.4Z" fill="url(#lg-drop-2)" />
+              <path d="M10.3 10.2v5.4l4.5-2.7z" fill="#fff" />
+            </svg>
           </span>
           <span class="brand__name">mpv <strong>Liquid&nbsp;Glass</strong></span>
         </a>
         <p class="footer__tag">A frosted-glass skin for the mpv media player.</p>
+        <a class="footer__author" href="https://github.com/subhasisbiswal012" target="_blank" rel="noopener">
+          <img class="avatar" src="https://github.com/subhasisbiswal012.png?size=80" width="40" height="40" alt="Subhasis Biswal on GitHub" loading="lazy" decoding="async" />
+          <span>Created by <strong>Subhasis Biswal</strong><br /><span class="footer__author-sub">@subhasisbiswal012 on GitHub</span></span>
+        </a>
       </div>
       <nav class="footer__links" aria-label="Footer">
         <a href="#features">Features</a>

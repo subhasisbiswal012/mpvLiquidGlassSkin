@@ -156,6 +156,61 @@
     });
   });
 
+  /* ---------- Demo video: audio on by default ---------- */
+  // Browsers block autoplay WITH sound until the user interacts with the page.
+  // So we keep the video unmuted and kick off playback on the first gesture.
+  const demoVideo = document.getElementById("demo-video");
+  if (demoVideo) {
+    demoVideo.volume = 1;
+    let hasGesture = false; // becomes true after the first click/tap/keypress
+    let inView = false;
+
+    const tryPlay = () => {
+      const p = demoVideo.play();
+      if (p && typeof p.catch === "function") p.catch(() => {});
+    };
+
+    // Replay from the start when it ends (backstop alongside the loop attribute).
+    demoVideo.addEventListener("ended", () => {
+      demoVideo.currentTime = 0;
+      tryPlay();
+    });
+
+    // Autoplay every time the demo scrolls into view; pause when it scrolls away.
+    // Plays muted until the visitor has interacted (browser autoplay policy),
+    // then plays with sound on every subsequent entrance.
+    if ("IntersectionObserver" in window) {
+      const videoObserver = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            inView = entry.isIntersecting;
+            if (inView) {
+              demoVideo.muted = !hasGesture;
+              tryPlay();
+            } else {
+              demoVideo.pause();
+            }
+          });
+        },
+        { threshold: 0.4 }
+      );
+      videoObserver.observe(demoVideo);
+    } else {
+      tryPlay();
+    }
+
+    // First real user gesture anywhere unlocks sound; unmute and keep playing.
+    const enableSound = () => {
+      hasGesture = true;
+      demoVideo.muted = false;
+      if (inView) tryPlay();
+      window.removeEventListener("pointerdown", enableSound);
+      window.removeEventListener("keydown", enableSound);
+    };
+    window.addEventListener("pointerdown", enableSound, { passive: true });
+    window.addEventListener("keydown", enableSound);
+  }
+
   /* ---------- Gallery lightbox ---------- */
   const lightbox = document.getElementById("lightbox");
   const lightboxImg = document.getElementById("lightbox-img");
