@@ -506,6 +506,7 @@ function Controls:render()
 	local osd_active = _osd_now < (self._lg_vol_osd_until or 0)
 		or _osd_now < (self._lg_seek_osd_until or 0)
 		or _osd_now < (self._lg_speed_osd_until or 0)
+		or _osd_now < (self._lg_pause_osd_until or 0)
 	if visibility <= 0 and not osd_active then return end
 	if not self.enabled then return end
 	-- When the bar is hidden but an OSD is active, draw ONLY the centered OSD so
@@ -522,6 +523,7 @@ function Controls:render()
 	self._lg_vol_osd_until = self._lg_vol_osd_until or 0
 	self._lg_seek_osd_until = self._lg_seek_osd_until or 0
 	self._lg_speed_osd_until = self._lg_speed_osd_until or 0
+	self._lg_pause_osd_until = self._lg_pause_osd_until or 0
 
 	-- Glass + ink helpers are needed by both the control bar and the centered
 	-- OSD overlays, so define them before the `only_osd` guard below.
@@ -1153,11 +1155,27 @@ function Controls:render()
 	local win_cx = display.width / 2
 	local win_cy = display.height / 2
 
-	-- Only one OSD at a time: volume > speed > seek priority.
-	local show_vol_osd   = now < (self._lg_vol_osd_until or 0)
-	local show_speed_osd = (not show_vol_osd) and now < (self._lg_speed_osd_until or 0)
-	local show_seek_osd  = (not show_vol_osd) and (not show_speed_osd)
+	-- Only one OSD at a time: pause > volume > speed > seek priority.
+	local show_pause_osd = now < (self._lg_pause_osd_until or 0)
+	local show_vol_osd   = (not show_pause_osd) and now < (self._lg_vol_osd_until or 0)
+	local show_speed_osd = (not show_pause_osd) and (not show_vol_osd)
+	                       and now < (self._lg_speed_osd_until or 0)
+	local show_seek_osd  = (not show_pause_osd) and (not show_vol_osd) and (not show_speed_osd)
 	                       and now < (self._lg_seek_osd_until or 0)
+
+	if show_pause_osd then
+		-- YouTube-style centered play/pause OSD. Shows the 'pause' glyph when the
+		-- video was just paused, the 'play' glyph when it was just resumed — the
+		-- same icons the play/pause button on the control bar uses.
+		local osd_sz = 200
+		draw_glass({
+			x = win_cx - osd_sz / 2, y = win_cy - osd_sz / 2, w = osd_sz, h = osd_sz, r = 32,
+			intensity = lg.intensity * 1.8, show_frost = lg.show_frost, shadow_blur = 40,
+		})
+		local pause_icon = self._lg_pause_osd_paused and 'pause' or 'play'
+		liquid_icons_lib.draw_at(ass, pause_icon, win_cx, win_cy, 110, ink_rgb, '&H10&')
+		if now < self._lg_pause_osd_until - 0.05 then request_render() end
+	end
 
 	if show_vol_osd then
 		local osd_w, osd_h = 220, 180
@@ -1555,6 +1573,27 @@ mp.register_script_message('lg-volume', function(delta)
 	new_vol = math.max(0, math.min(new_vol, state.volume_max or 100))
 	mp.commandv('no-osd', 'set', 'volume', new_vol)
 	_lg_show_vol_osd()
+end)
+
+-- Centered play/pause OSD: flash the play/pause glyph at screen center on every
+-- pause toggle (right-click, spacebar, play button, …), YouTube-style. The stock
+-- pause_indicator element is suppressed by this skin, so we draw it here instead.
+local _lg_pause_osd_seeded = false
+mp.observe_property('pause', 'bool', function(_, paused)
+	-- observe_property fires once with the initial value on registration; ignore
+	-- it so we don't flash an OSD on startup — only on genuine toggles.
+	if not _lg_pause_osd_seeded then
+		_lg_pause_osd_seeded = true
+		return
+	end
+	local ctrl = Elements and Elements.controls
+	if not ctrl then return end
+	ctrl._lg_pause_osd_paused = paused
+	ctrl._lg_pause_osd_until = mp.get_time() + 1
+	ctrl._lg_vol_osd_until = 0
+	ctrl._lg_seek_osd_until = 0
+	ctrl._lg_speed_osd_until = 0
+	request_render()
 end)
 -- ===== /Liquid Glass skin patch =====
 
