@@ -572,8 +572,6 @@ code, kbd { font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, mon
 }
 .release__list strong { color: var(--text); font-weight: 600; }
 .release__links { display: flex; flex-wrap: wrap; gap: 0.6rem; }
-.releases__all { text-align: center; margin-top: var(--sp-3); }
-.releases__all a { color: var(--accent); font-weight: 600; }
 
 /* ---------- Feature grid ---------- */
 .feature-grid {
