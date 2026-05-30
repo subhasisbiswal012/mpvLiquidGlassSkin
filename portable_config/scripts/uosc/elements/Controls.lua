@@ -1500,6 +1500,46 @@ mp.register_script_message('lg-scroll-down', function()
 	end
 	request_render()
 end)
+
+-- Keyboard-driven controls. Mirror the scroll wheel's centered OSD so that
+-- seeking / volume changes from the keyboard get the same visual feedback.
+local function _lg_show_seek_osd()
+	local ctrl = Elements and Elements.controls
+	if not ctrl then return end
+	ctrl._lg_seek_osd_until = mp.get_time() + 2
+	ctrl._lg_vol_osd_until = 0
+	ctrl._lg_speed_osd_until = 0
+	request_render()
+end
+
+local function _lg_show_vol_osd()
+	local ctrl = Elements and Elements.controls
+	if not ctrl then return end
+	ctrl._lg_vol_osd_until = mp.get_time() + 2
+	ctrl._lg_seek_osd_until = 0
+	ctrl._lg_speed_osd_until = 0
+	request_render()
+end
+
+-- Relative seek by N seconds (N may be negative), with the centered seek OSD.
+mp.register_script_message('lg-seek', function(amount)
+	mp.commandv('no-osd', 'seek', tonumber(amount) or 0, 'relative+exact')
+	_lg_show_seek_osd()
+end)
+
+-- Absolute seek to a percentage of the video (0-100), with the centered seek OSD.
+mp.register_script_message('lg-seek-percent', function(percent)
+	mp.commandv('no-osd', 'seek', tonumber(percent) or 0, 'absolute-percent+exact')
+	_lg_show_seek_osd()
+end)
+
+-- Adjust volume by N (N may be negative), clamped, with the centered volume OSD.
+mp.register_script_message('lg-volume', function(delta)
+	local new_vol = (state.volume or 0) + (tonumber(delta) or 0)
+	new_vol = math.max(0, math.min(new_vol, state.volume_max or 100))
+	mp.commandv('no-osd', 'set', 'volume', new_vol)
+	_lg_show_vol_osd()
+end)
 -- ===== /Liquid Glass skin patch =====
 
 function Controls:destroy_elements()
