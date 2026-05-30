@@ -499,8 +499,18 @@ end
 
 function Controls:render()
 	local visibility = self:get_visibility()
-	if visibility <= 0 then return end
+	-- Keep rendering while a centered OSD (volume / seek / speed) is active, even
+	-- when the control bar itself is hidden — e.g. when triggered from the keyboard,
+	-- where there's no cursor proximity to keep the bar visible.
+	local _osd_now = mp.get_time()
+	local osd_active = _osd_now < (self._lg_vol_osd_until or 0)
+		or _osd_now < (self._lg_seek_osd_until or 0)
+		or _osd_now < (self._lg_speed_osd_until or 0)
+	if visibility <= 0 and not osd_active then return end
 	if not self.enabled then return end
+	-- When the bar is hidden but an OSD is active, draw ONLY the centered OSD so
+	-- the full control bar doesn't pop into view on every keypress.
+	local only_osd = visibility <= 0
 
 	for _, control in ipairs(self.layout) do
 		if control.element then control.element.enabled = false end
@@ -512,6 +522,23 @@ function Controls:render()
 	self._lg_vol_osd_until = self._lg_vol_osd_until or 0
 	self._lg_seek_osd_until = self._lg_seek_osd_until or 0
 	self._lg_speed_osd_until = self._lg_speed_osd_until or 0
+
+	-- Glass + ink helpers are needed by both the control bar and the centered
+	-- OSD overlays, so define them before the `only_osd` guard below.
+	local function draw_glass(geom)
+		for layer_text in liquid_glass_lib.draw(geom):gmatch('[^\n]+') do
+			if layer_text:sub(1, 2) ~= '--' and layer_text ~= '' then
+				ass:new_event()
+				ass:append(layer_text)
+			end
+		end
+	end
+
+	local ink_rgb = liquid_theme_lib.current.ink
+	local ink_bgr = _lg_bgr(ink_rgb)
+	local accent_bgr = _lg_bgr(liquid_theme_lib.current.accent)
+
+	if not only_osd then
 
 	-- Suppress all stock uosc surfaces — we draw everything here.
 	if Elements then
@@ -538,19 +565,6 @@ function Controls:render()
 			end
 		end
 	end
-
-	local function draw_glass(geom)
-		for layer_text in liquid_glass_lib.draw(geom):gmatch('[^\n]+') do
-			if layer_text:sub(1, 2) ~= '--' and layer_text ~= '' then
-				ass:new_event()
-				ass:append(layer_text)
-			end
-		end
-	end
-
-	local ink_rgb = liquid_theme_lib.current.ink
-	local ink_bgr = _lg_bgr(ink_rgb)
-	local accent_bgr = _lg_bgr(liquid_theme_lib.current.accent)
 
 	-- Helper: draw a rounded pill (for progress bar tracks).
 	local function emit_pill(px1, py, px2, ph, color_hex, alpha_byte_str)
@@ -1130,6 +1144,8 @@ function Controls:render()
 			cursor:zone('primary_down', playlist_rect, function() mp.command('script-binding uosc/items') end)
 		end
 	end
+
+	end -- /if not only_osd
 
 	-- ==================== 4. CENTERED OSD OVERLAYS (macOS style) ====================
 	-- Centered on the full player window, not the controls area.
