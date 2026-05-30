@@ -65,6 +65,10 @@ Scroll the wheel over the volume block (or anywhere on the volume pebble) and a 
 
 Scroll the wheel anywhere on the video itself and the player seeks ±5 s, surfacing a centred Seek HUD with a video-camera SVG and a clean progress %. The white background that ships with SVGRepo's `clipPath` is correctly stripped at parse time so only the camera silhouette shows.
 
+### Play / Pause OSD
+
+A YouTube-style centred HUD flashes the play/pause glyph in the middle of the player on **every** pause toggle — right-click, spacebar, or the on-screen play button. Shows the **pause** icon when you pause and the **play** icon when you resume (the same SVGs as the control-bar transport button), then auto-hides after ~1 s.
+
 ### Elastic Speedometer
 
 ![Speedometer OSD with elastic needle, tick flash, and gold glow](screenshots/Showing%20Speed%20OSD.png)
@@ -96,6 +100,15 @@ A subtle warm-gold luminosity bleeds outward from whichever icon or text label t
 - **Scroll on the speed pebble** = elastic speedometer (above)
 - **Scroll on the volume block** = adjust volume + Volume OSD (above)
 - **Scroll anywhere else on the video** = seek ±5 s + Seek OSD (above)
+
+### Keyboard & Controller Controls
+
+Full keyboard control, with the same centred glass OSDs the scroll wheel uses — so feedback shows even when the mouse is idle and the control bar is hidden. Gamer-friendly `WASD` aliases are bound alongside the arrow keys.
+
+- **Seek** — `←` / `→` or `A` / `D` jump ±5 s and surface the Seek OSD. Hold the key to keep seeking.
+- **Volume** — `↑` / `↓` or `W` / `S` adjust volume ±5 and surface the Volume OSD. Hold to ramp.
+- **Jump to position** — number keys `0`–`9` (top row **and** the numpad `KP0`–`KP9`) seek to that percentage of the file: `0` = start, `5` = 50%, `9` = 90%. Scales with the video's duration.
+- **Play / Pause** — right-click the video to toggle, with the centred Play/Pause OSD (above).
 
 ### Info Button
 
@@ -243,7 +256,13 @@ Drop a short `tick.wav` (16-bit PCM, 30–80 ms) into [`assets/sounds/`](portabl
 
 | Key | Action |
 |---|---|
+| `←` / `→`, `A` / `D` | Seek ∓5 s (hold to repeat) + Seek OSD |
+| `↑` / `↓`, `W` / `S` | Volume ±5 (hold to repeat) + Volume OSD |
+| `0`–`9`, `KP0`–`KP9` | Jump to 0–90 % of the file + Seek OSD |
+| `Right-click` | Toggle play/pause + centred Play/Pause OSD |
 | `Ctrl+T` | Toggle dark/light theme |
+
+All bindings live in [`portable_config/input.conf`](portable_config/input.conf) — edit or remap them there.
 
 ## How It Works
 

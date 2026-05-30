@@ -499,6 +499,21 @@ code, kbd { font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, mon
   height: 1px;
   background: linear-gradient(90deg, transparent, var(--border-strong), transparent);
 }
+.glass-card[data-badge]::after {
+  content: attr(data-badge);
+  position: absolute;
+  top: var(--sp-2);
+  right: var(--sp-2);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+}
 
 /* ---------- Feature grid ---------- */
 .feature-grid {
