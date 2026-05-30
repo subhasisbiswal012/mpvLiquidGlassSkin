@@ -25,7 +25,14 @@ function PauseIndicator:flash()
 	-- The pause event is not fired fast enough, and indicator starts rendering with old icon.
 	self.paused = mp.get_property_native('pause')
 	self.fadeout, self.opacity = false, 1
-	self:tween_property('opacity', 1, 0, 300)
+	-- YouTube-style: hold the icon at full opacity for ~0.6s, then fade out over 0.4s
+	-- (~1s total) so a right-click play/pause toggle reads clearly at screen center.
+	if self._flash_timer then self._flash_timer:kill() end
+	self:tween_stop()
+	request_render()
+	self._flash_timer = mp.add_timeout(0.6, function()
+		self:tween_property('opacity', 1, 0, 400)
+	end)
 end
 
 -- Decides whether static indicator should be visible or not.
