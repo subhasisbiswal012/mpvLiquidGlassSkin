@@ -171,6 +171,10 @@ function Timeline:render()
 	if visibility <= 0 then return end
 	if not state.duration or state.duration <= 0 then return end
 
+	-- `is_hovered` drives the chapter glow + title below. Derive it from the
+	-- element's proximity (0 px == cursor is over the timeline strip).
+	self.is_hovered = self.enabled and self.proximity_raw == 0
+
 	local glass = require('lib/liquid/glass')
 	local theme = require('lib/liquid/theme')
 	local lg = _G.liquid_glass or { intensity = 1.0, show_frost = true }
@@ -194,6 +198,9 @@ function Timeline:render()
 	local pebble_ay = self.by - strip_h - 4
 	local pebble_by = self.by - 4
 	local pebble_r = strip_h / 2
+
+	-- Publish the visible bar rect so other elements (SkipPill) can anchor to it.
+	self.bar = {ax = pebble_ax, ay = pebble_ay, bx = pebble_bx, by = pebble_by}
 
 	draw_glass({
 		x = pebble_ax, y = pebble_ay, w = pebble_w, h = strip_h, r = pebble_r,
@@ -231,9 +238,9 @@ function Timeline:render()
 				local tx = pebble_ax + math.floor(pebble_w * (chapter.time / state.duration))
 				ass:new_event()
 				ass:append(string.format(
-					'{\\an7\\pos(0,0)\\bord0\\shad0\\1c&HFFFFFF&\\1a&H80&\\p1}m %d %d l %d %d l %d %d l %d %d{\\p0}',
-					tx, pebble_ay + 2, tx + 1, pebble_ay + 2,
-					tx + 1, pebble_by - 2, tx, pebble_by - 2
+					'{\\an7\\pos(0,0)\\bord0\\shad0\\1c&H1A1A1A&\\1a&H30&\\p1}m %d %d l %d %d l %d %d l %d %d{\\p0}',
+					tx, pebble_ay + 2, tx + 2, pebble_ay + 2,
+					tx + 2, pebble_by - 2, tx, pebble_by - 2
 				))
 			end
 		end
@@ -262,8 +269,8 @@ function Timeline:render()
 					gx_b, pebble_by + pad, gx_a, pebble_by + pad
 				))
 			end
-			band('A0', 8, 2) -- soft outer glow
-			band('60', 2, 0) -- crisper inner band
+			band('70', 8, 3) -- soft outer glow
+			band('30', 2, 1) -- crisper inner band
 
 			-- Chapter title tooltip above the timeline (title only, no timestamp).
 			local label = chapters_lib.truncate(chapters_lib.chapter_label(chapter, chapter_i), 48)

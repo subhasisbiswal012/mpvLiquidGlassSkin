@@ -2,6 +2,7 @@ local Element = require('elements/Element')
 local chapters_lib = require('lib/chapters')
 local theme = require('lib/liquid/theme')
 local liquid_icons = require('lib/liquid/icons')
+local glass = require('lib/liquid/glass')
 
 -- A single floating "skip" pill anchored above the right end of the timeline.
 -- It resolves to exactly one of three states each frame:
@@ -93,25 +94,26 @@ function SkipPill:render()
 
 	local scale = state.scale
 	local fs = round(15 * scale)
-	local pad_x = round(12 * scale)
+	local pad_x = round(14 * scale)
 	local pad_y = round(7 * scale)
 	local gap = round(8 * scale)
 	local icon_size = round(20 * scale)
 	local accent = theme.current.accent
-	local accent_bgr = accent:sub(5, 6) .. accent:sub(3, 4) .. accent:sub(1, 2)
+	local ink = theme.current.ink
+	local ink_bgr = ink:sub(5, 6) .. ink:sub(3, 4) .. ink:sub(1, 2)
 
 	local text_w = text_width(label, {size = fs, font = config.font, bold = options.font_bold})
 	local pill_w = pad_x + text_w + gap + icon_size + pad_x
 	local pill_h = math.max(fs, icon_size) + pad_y * 2
 
-	-- Anchor to the top-right of the timeline strip.
-	local wb = Elements:v('window_border', 'size', 0)
+	-- Anchor flush to the right end of the visible progress bar, sitting just
+	-- above it. `tl.bar` is published by Timeline:render each frame.
 	local tl = Elements.timeline
-	local right = (tl and tl.bx or (display.width - wb)) - round(20 * scale)
-	local base_y = (tl and tl.ay) or (display.height - wb - round(60 * scale))
-	local pill_bx = right
+	local bar = tl and tl.bar
+	local pill_bx = (bar and bar.bx) or (tl and tl.bx) or display.width
+	local bar_top = (bar and bar.ay) or (tl and tl.ay) or (display.height - round(60 * scale))
 	local pill_ax = pill_bx - pill_w
-	local pill_by = base_y - round(10 * scale)
+	local pill_by = bar_top - round(8 * scale)
 	local pill_ay = pill_by - pill_h
 
 	self.ax, self.ay, self.bx, self.by = pill_ax, pill_ay, pill_bx, pill_by
@@ -124,22 +126,25 @@ function SkipPill:render()
 	local ass = assdraw.ass_new()
 	local mid_y = round((pill_ay + pill_by) / 2)
 
-	-- Pill background + accent rim.
-	ass:rect(pill_ax, pill_ay, pill_bx, pill_by, {
-		color = bg,
-		opacity = 0.88 * opacity,
-		radius = round(pill_h / 2),
-		border = round(1 * scale),
-		border_color = accent_bgr,
-	})
+	-- Frosted-glass pill (same primitive as the progress bar).
+	local lg = _G.liquid_glass or {intensity = 1.0, show_frost = true}
+	for layer in glass.draw({
+		x = pill_ax, y = pill_ay, w = pill_w, h = pill_h, r = round(pill_h / 2),
+		intensity = lg.intensity, show_frost = lg.show_frost,
+	}):gmatch('[^\n]+') do
+		if layer:sub(1, 2) ~= '--' and layer ~= '' then
+			ass:new_event()
+			ass:append(layer)
+		end
+	end
 
-	-- Label (left) and skip icon (right). The icon uses the skin's SVG-backed
-	-- 'next' glyph (same as the control bar) for guaranteed, consistent rendering.
+	-- Label in ink with a soft border for legibility, plus the accent 'next'
+	-- glyph (SVG-backed, same icon as the control bar).
 	ass:txt(pill_ax + pad_x, mid_y, 4, label, {
-		size = fs, color = fg, font = config.font, opacity = opacity,
+		size = fs, color = ink_bgr, font = config.font,
+		border = options.text_border * scale, border_color = bg,
 	})
-	local alpha_byte = string.format('&H%02X&', clamp(0, math.floor((1 - opacity) * 255), 255))
-	liquid_icons.draw_at(ass, 'next', pill_bx - pad_x - round(icon_size / 2), mid_y, icon_size, accent, alpha_byte)
+	liquid_icons.draw_at(ass, 'next', pill_bx - pad_x - round(icon_size / 2), mid_y, icon_size, accent, '&H10&')
 
 	return ass
 end

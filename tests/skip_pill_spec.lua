@@ -36,7 +36,7 @@ local function load_pill(env)
 	_G.clamp = function(lo, v, hi) return math.max(lo, math.min(v, hi)) end
 	_G.text_width = function() return 80 end
 	_G.config = {font = 'Geist'}
-	_G.options = {font_bold = false}
+	_G.options = {font_bold = false, text_border = 1}
 	_G.display = {width = 1920, height = 1080}
 	_G.bg = '000000'
 	_G.fg = 'FFFFFF'
