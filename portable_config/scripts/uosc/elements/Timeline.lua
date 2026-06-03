@@ -231,16 +231,20 @@ function Timeline:render()
 		))
 	end
 
-	-- Chapter ticks: thin vertical lines through the strip.
+	-- Chapter ticks: thick, bright dividers (yellow with a dark outline so they
+	-- stay visible over any video and against the accent progress fill).
 	if state.chapters and #state.chapters > 0 then
+		local tick_w = math.max(3, round(3 * state.scale))
 		for _, chapter in ipairs(state.chapters) do
 			if chapter.time > 0 and chapter.time < state.duration then
 				local tx = pebble_ax + math.floor(pebble_w * (chapter.time / state.duration))
+				local x0 = tx - math.floor(tick_w / 2)
+				local x1 = x0 + tick_w
 				ass:new_event()
 				ass:append(string.format(
-					'{\\an7\\pos(0,0)\\bord0\\shad0\\1c&H1A1A1A&\\1a&H30&\\p1}m %d %d l %d %d l %d %d l %d %d{\\p0}',
-					tx, pebble_ay + 2, tx + 2, pebble_ay + 2,
-					tx + 2, pebble_by - 2, tx, pebble_by - 2
+					'{\\an7\\pos(0,0)\\bord1\\shad0\\1c&H00CCFF&\\3c&H000000&\\1a&H00&\\p1}m %d %d l %d %d l %d %d l %d %d{\\p0}',
+					x0, pebble_ay, x1, pebble_ay,
+					x1, pebble_by, x0, pebble_by
 				))
 			end
 		end
@@ -255,24 +259,19 @@ function Timeline:render()
 		local hover_time = self:get_time_at_x(cursor.x)
 		local chapter, chapter_i = chapters_lib.chapter_at_time(state.chapters, hover_time)
 
-		if chapter then
-			-- Glow the whole span of the hovered chapter on the strip.
-			local span = chapters_lib.chapter_span(state.chapters, chapter_i, state.duration)
-			local gx_a = clamp(pebble_ax, math.floor(pebble_ax + pebble_w * (span.start / state.duration)), pebble_bx)
-			local gx_b = clamp(pebble_ax, math.ceil(pebble_ax + pebble_w * (span.stop / state.duration)), pebble_bx)
-			local function band(alpha, blur, pad)
-				ass:new_event()
-				ass:append(string.format(
-					'{\\an7\\pos(0,0)\\bord0\\shad0\\blur%d\\1c&H%s&\\1a&H%s&\\p1}m %d %d l %d %d l %d %d l %d %d{\\p0}',
-					blur, accent_bgr, alpha,
-					gx_a, pebble_ay - pad, gx_b, pebble_ay - pad,
-					gx_b, pebble_by + pad, gx_a, pebble_by + pad
-				))
-			end
-			band('70', 8, 3) -- soft outer glow
-			band('30', 2, 1) -- crisper inner band
+		-- Thin vertical seek indicator at cursor.x.
+		ass:new_event()
+		ass:append(string.format(
+			'{\\an7\\pos(0,0)\\bord0\\shad0\\1c&H%s&\\1a&H20&\\p1}m %d %d l %d %d l %d %d l %d %d{\\p0}',
+			accent_bgr,
+			math.floor(cursor.x) - 1, pebble_ay,
+			math.floor(cursor.x) + 1, pebble_ay,
+			math.floor(cursor.x) + 1, pebble_by,
+			math.floor(cursor.x) - 1, pebble_by
+		))
 
-			-- Chapter title tooltip above the timeline (title only, no timestamp).
+		-- Chapter title above the timeline (title only — no timestamp, no glow).
+		if chapter then
 			local label = chapters_lib.truncate(chapters_lib.chapter_label(chapter, chapter_i), 48)
 			ass:new_event()
 			ass:append(string.format(
@@ -280,17 +279,6 @@ function Timeline:render()
 				math.floor(cursor.x), pebble_ay - 6,
 				'Geist Mono', self.font_size > 0 and self.font_size or 14,
 				'FFFFFF', label
-			))
-		else
-			-- Thin vertical seek indicator at cursor.x.
-			ass:new_event()
-			ass:append(string.format(
-				'{\\an7\\pos(0,0)\\bord0\\shad0\\1c&H%s&\\1a&H20&\\p1}m %d %d l %d %d l %d %d l %d %d{\\p0}',
-				accent_bgr,
-				math.floor(cursor.x) - 1, pebble_ay,
-				math.floor(cursor.x) + 1, pebble_ay,
-				math.floor(cursor.x) + 1, pebble_by,
-				math.floor(cursor.x) - 1, pebble_by
 			))
 		end
 	end

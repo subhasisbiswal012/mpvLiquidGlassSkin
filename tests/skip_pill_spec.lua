@@ -45,8 +45,8 @@ local function load_pill(env)
 	_G.Elements = {
 		curtain = {opacity = env.curtain or 0},
 		timeline = {ax = 0, ay = 1000, bx = 1920, by = 1060, enabled = true},
-		maybe = function(_, id, method)
-			if id == 'timeline' and method == 'get_visibility' then return env.controls_visibility or 0 end
+		maybe = function(_, _, method)
+			if method == 'get_visibility' then return env.controls_visibility or 0 end
 			return nil
 		end,
 		v = function(_, _, _, default) return default end,
@@ -175,7 +175,19 @@ describe('SkipPill:render', function()
 		assert.is_nil((pill:render()))
 	end)
 
-	it('draws the next-video pill even without controls', function()
+	it('draws the next-video pill when controls are visible', function()
+		local pill = load_pill({
+			state = {
+				duration = 600, time = 540, chapters = {},
+				has_playlist = true, playlist_pos = 1, playlist_count = 2,
+			},
+			controls_visibility = 1,
+			mp = {get_property = function() return 'Up Next' end, commandv = function() end},
+		})
+		assert.is_table((pill:render()))
+	end)
+
+	it('hides the next-video pill when controls are hidden', function()
 		local pill = load_pill({
 			state = {
 				duration = 600, time = 540, chapters = {},
@@ -184,7 +196,7 @@ describe('SkipPill:render', function()
 			controls_visibility = 0,
 			mp = {get_property = function() return 'Up Next' end, commandv = function() end},
 		})
-		assert.is_table((pill:render()))
+		assert.is_nil((pill:render()))
 	end)
 
 	it('hides behind an open menu (curtain)', function()

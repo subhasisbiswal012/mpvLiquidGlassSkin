@@ -84,21 +84,19 @@ function SkipPill:render()
 	-- Hide behind menus / curtain.
 	if Elements.curtain and Elements.curtain.opacity > 0 then return end
 
-	-- Chapter pill rides the controls' visibility; the video pill is the
-	-- end-of-file CTA and shows on its own.
-	local opacity = mode == 'video' and 1 or (Elements:maybe('timeline', 'get_visibility') or 0)
+	-- Only show while the rest of the controls are visible.
+	local opacity = Elements:maybe('controls', 'get_visibility') or 0
 	if opacity <= 0 then
 		self.ax, self.ay, self.bx, self.by = 0, 0, 0, 0
 		return
 	end
 
 	local scale = state.scale
-	local fs = round(15 * scale)
-	local pad_x = round(14 * scale)
-	local pad_y = round(7 * scale)
+	local fs = round(14 * scale)
+	local pad_x = round(13 * scale)
+	local pad_y = round(5 * scale)
 	local gap = round(8 * scale)
-	local icon_size = round(20 * scale)
-	local accent = theme.current.accent
+	local icon_size = round(18 * scale)
 	local ink = theme.current.ink
 	local ink_bgr = ink:sub(5, 6) .. ink:sub(3, 4) .. ink:sub(1, 2)
 
@@ -113,7 +111,7 @@ function SkipPill:render()
 	local pill_bx = (bar and bar.bx) or (tl and tl.bx) or display.width
 	local bar_top = (bar and bar.ay) or (tl and tl.ay) or (display.height - round(60 * scale))
 	local pill_ax = pill_bx - pill_w
-	local pill_by = bar_top - round(8 * scale)
+	local pill_by = bar_top - round(2 * scale)
 	local pill_ay = pill_by - pill_h
 
 	self.ax, self.ay, self.bx, self.by = pill_ax, pill_ay, pill_bx, pill_by
@@ -144,7 +142,7 @@ function SkipPill:render()
 		size = fs, color = ink_bgr, font = config.font,
 		border = options.text_border * scale, border_color = bg,
 	})
-	liquid_icons.draw_at(ass, 'next', pill_bx - pad_x - round(icon_size / 2), mid_y, icon_size, accent, '&H10&')
+	liquid_icons.draw_at(ass, 'next', pill_bx - pad_x - round(icon_size / 2), mid_y, icon_size, ink, '&H10&')
 
 	return ass
 end
