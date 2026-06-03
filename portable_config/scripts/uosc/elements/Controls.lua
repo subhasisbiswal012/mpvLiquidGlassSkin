@@ -874,7 +874,7 @@ function Controls:render()
 				ass:append(string.format(
 					'{\\an2\\pos(%d,%d)\\fn%s\\fs%d\\bord2\\3c&H000000&\\3a&H10&\\shad2\\4c&H000000&\\4a&H40&\\1c&H%s&}%s',
 					math.floor(tcx), progress_y - 4,
-					config.font, math.floor(progress_h * 0.7), ink_bgr, label
+					config.font, FILENAME_FS, ink_bgr, label
 				))
 			end
 		end
