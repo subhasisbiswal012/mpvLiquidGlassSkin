@@ -1,4 +1,5 @@
 local Element = require('elements/Element')
+local chapters_lib = require('lib/chapters')
 
 ---@class Timeline : Element
 local Timeline = class(Element)
@@ -170,6 +171,10 @@ function Timeline:render()
 	if visibility <= 0 then return end
 	if not state.duration or state.duration <= 0 then return end
 
+	-- `is_hovered` drives the chapter glow + title below. Derive it from the
+	-- element's proximity (0 px == cursor is over the timeline strip).
+	self.is_hovered = self.enabled and self.proximity_raw == 0
+
 	local glass = require('lib/liquid/glass')
 	local theme = require('lib/liquid/theme')
 	local lg = _G.liquid_glass or { intensity = 1.0, show_frost = true }
@@ -193,6 +198,9 @@ function Timeline:render()
 	local pebble_ay = self.by - strip_h - 4
 	local pebble_by = self.by - 4
 	local pebble_r = strip_h / 2
+
+	-- Publish the visible bar rect so other elements (SkipPill) can anchor to it.
+	self.bar = {ax = pebble_ax, ay = pebble_ay, bx = pebble_bx, by = pebble_by}
 
 	draw_glass({
 		x = pebble_ax, y = pebble_ay, w = pebble_w, h = strip_h, r = pebble_r,
@@ -223,25 +231,38 @@ function Timeline:render()
 		))
 	end
 
-	-- Chapter ticks: thin vertical lines through the strip.
+	-- Chapter ticks: thick, bright dividers (yellow with a dark outline so they
+	-- stay visible over any video and against the accent progress fill).
 	if state.chapters and #state.chapters > 0 then
+		local tick_w = math.max(5, round(4 * state.scale))
+		local ti = 0
 		for _, chapter in ipairs(state.chapters) do
 			if chapter.time > 0 and chapter.time < state.duration then
+				ti = ti + 1
+				local col = (ti % 2 == 1) and '0000FF' or 'FF0000' -- BGR: red, blue
 				local tx = pebble_ax + math.floor(pebble_w * (chapter.time / state.duration))
+				local x0 = tx - math.floor(tick_w / 2)
+				local x1 = x0 + tick_w
 				ass:new_event()
 				ass:append(string.format(
-					'{\\an7\\pos(0,0)\\bord0\\shad0\\1c&HFFFFFF&\\1a&H80&\\p1}m %d %d l %d %d l %d %d l %d %d{\\p0}',
-					tx, pebble_ay + 2, tx + 1, pebble_ay + 2,
-					tx + 1, pebble_by - 2, tx, pebble_by - 2
+					'{\\an7\\pos(0,0)\\bord1\\shad0\\1c&H%s&\\3c&HFFFFFF&\\1a&H00&\\p1}m %d %d l %d %d l %d %d l %d %d{\\p0}',
+					col, x0, pebble_ay, x1, pebble_ay,
+					x1, pebble_by, x0, pebble_by
 				))
 			end
 		end
 	end
 
-	-- Hover indicator: a thin vertical accent line at cursor.x.
+	-- Hover behavior: glow the hovered chapter's span + show its title. Files
+	-- without chapters (or the gap before the first chapter) fall back to a
+	-- thin seek indicator so scrubbing still has visual feedback.
 	if self.is_hovered and cursor.x >= pebble_ax and cursor.x <= pebble_bx then
 		local accent = theme.current.accent
 		local accent_bgr = accent:sub(5, 6) .. accent:sub(3, 4) .. accent:sub(1, 2)
+		local hover_time = self:get_time_at_x(cursor.x)
+		local chapter, chapter_i = chapters_lib.chapter_at_time(state.chapters, hover_time)
+
+		-- Thin vertical seek indicator at cursor.x.
 		ass:new_event()
 		ass:append(string.format(
 			'{\\an7\\pos(0,0)\\bord0\\shad0\\1c&H%s&\\1a&H20&\\p1}m %d %d l %d %d l %d %d l %d %d{\\p0}',
@@ -252,14 +273,9 @@ function Timeline:render()
 			math.floor(cursor.x) - 1, pebble_by
 		))
 
-		-- Time tooltip above the timeline.
-		local hover_time = self:get_time_at_x(cursor.x)
-		if hover_time then
-			local h = math.floor(hover_time / 3600)
-			local m = math.floor((hover_time % 3600) / 60)
-			local s = math.floor(hover_time % 60)
-			local label = (h > 0) and string.format('%d:%02d:%02d', h, m, s)
-				or string.format('%d:%02d', m, s)
+		-- Chapter title above the timeline (title only — no timestamp, no glow).
+		if chapter then
+			local label = chapters_lib.truncate(chapters_lib.chapter_label(chapter, chapter_i), 48)
 			ass:new_event()
 			ass:append(string.format(
 				'{\\an2\\pos(%d,%d)\\bord0\\shad2\\fn%s\\fs%d\\1c&H%s&\\1a&H10&}%s',
