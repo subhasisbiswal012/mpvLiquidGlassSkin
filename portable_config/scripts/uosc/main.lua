@@ -127,6 +127,7 @@ local lg_opts = {
     liquid_glass_intensity = 1.0,
     liquid_glass_accent = 'E8553A',
     liquid_glass_show_frost_noise = 'yes',
+    liquid_glass_next_video_threshold = 120,
     reduced_motion = 'no',
 }
 require('mp.options').read_options(lg_opts, 'liquid-glass')
@@ -139,6 +140,7 @@ lg_motion.apply_reduced(lg_opts.reduced_motion)
 _G.liquid_glass = {
     intensity = tonumber(lg_opts.liquid_glass_intensity) or 1.0,
     show_frost = lg_opts.liquid_glass_show_frost_noise == 'yes',
+    next_video_threshold = tonumber(lg_opts.liquid_glass_next_video_threshold) or 120,
     motion = lg_motion,
 }
 
@@ -1369,6 +1371,7 @@ local constructors = {
 	pause_indicator = require('elements/PauseIndicator'),
 	top_bar = require('elements/TopBar'),
 	timeline = require('elements/Timeline'),
+	skip_pill = require('elements/SkipPill'),
 	controls = options.controls and options.controls ~= 'never' and require('elements/Controls'),
 	volume = itable_index_of({'left', 'right'}, options.volume) and require('elements/Volume'),
 }
