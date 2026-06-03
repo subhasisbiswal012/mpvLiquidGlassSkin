@@ -19,7 +19,7 @@ local SkipPill = class(Element)
 
 function SkipPill:new() return Class.new(self) --[[@as SkipPill]] end
 function SkipPill:init()
-	Element.init(self, 'skip_pill', {render_order = 6})
+	Element.init(self, 'skip_pill', {render_order = 7})
 	self._action = nil
 	self._nv_idx = nil
 	self._nv_title = nil
@@ -104,14 +104,13 @@ function SkipPill:render()
 	local pill_w = pad_x + text_w + gap + icon_size + pad_x
 	local pill_h = math.max(fs, icon_size) + pad_y * 2
 
-	-- Anchor flush to the right end of the visible progress bar, sitting just
-	-- above it. `tl.bar` is published by Timeline:render each frame.
-	local tl = Elements.timeline
-	local bar = tl and tl.bar
-	local pill_bx = (bar and bar.bx) or (tl and tl.bx) or display.width
-	local bar_top = (bar and bar.ay) or (tl and tl.ay) or (display.height - round(60 * scale))
+	-- Anchor to the filename line published by Controls: bottoms aligned with
+	-- the title, right-aligned, on the same line just above the progress bar.
+	local ctrl = Elements.controls
+	local anchor = ctrl and ctrl.skip_anchor
+	local pill_bx = (anchor and anchor.right) or (ctrl and ctrl.bx) or display.width
+	local pill_by = (anchor and anchor.baseline) or (ctrl and ctrl.ay) or (display.height - round(60 * scale))
 	local pill_ax = pill_bx - pill_w
-	local pill_by = bar_top - round(2 * scale)
 	local pill_ay = pill_by - pill_h
 
 	self.ax, self.ay, self.bx, self.by = pill_ax, pill_ay, pill_bx, pill_by

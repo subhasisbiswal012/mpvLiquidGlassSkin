@@ -234,16 +234,19 @@ function Timeline:render()
 	-- Chapter ticks: thick, bright dividers (yellow with a dark outline so they
 	-- stay visible over any video and against the accent progress fill).
 	if state.chapters and #state.chapters > 0 then
-		local tick_w = math.max(3, round(3 * state.scale))
+		local tick_w = math.max(5, round(4 * state.scale))
+		local ti = 0
 		for _, chapter in ipairs(state.chapters) do
 			if chapter.time > 0 and chapter.time < state.duration then
+				ti = ti + 1
+				local col = (ti % 2 == 1) and '0000FF' or 'FF0000' -- BGR: red, blue
 				local tx = pebble_ax + math.floor(pebble_w * (chapter.time / state.duration))
 				local x0 = tx - math.floor(tick_w / 2)
 				local x1 = x0 + tick_w
 				ass:new_event()
 				ass:append(string.format(
-					'{\\an7\\pos(0,0)\\bord1\\shad0\\1c&H00CCFF&\\3c&H000000&\\1a&H00&\\p1}m %d %d l %d %d l %d %d l %d %d{\\p0}',
-					x0, pebble_ay, x1, pebble_ay,
+					'{\\an7\\pos(0,0)\\bord1\\shad0\\1c&H%s&\\3c&HFFFFFF&\\1a&H00&\\p1}m %d %d l %d %d l %d %d l %d %d{\\p0}',
+					col, x0, pebble_ay, x1, pebble_ay,
 					x1, pebble_by, x0, pebble_by
 				))
 			end

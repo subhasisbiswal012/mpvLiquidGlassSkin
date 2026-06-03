@@ -45,6 +45,7 @@ local function load_pill(env)
 	_G.Elements = {
 		curtain = {opacity = env.curtain or 0},
 		timeline = {ax = 0, ay = 1000, bx = 1920, by = 1060, enabled = true},
+		controls = {ax = 0, ay = 980, bx = 1920, by = 1060, skip_anchor = {right = 1900, baseline = 970}},
 		maybe = function(_, _, method)
 			if method == 'get_visibility' then return env.controls_visibility or 0 end
 			return nil

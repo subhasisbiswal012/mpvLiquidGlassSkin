@@ -3,6 +3,7 @@ local Button = require('elements/Button')
 local CycleButton = require('elements/CycleButton')
 local ManagedButton = require('elements/ManagedButton')
 local Speed = require('elements/Speed')
+local chapters_lib = require('lib/chapters')
 
 -- sizing:
 --   static - shrink, have highest claim on available space, disappear when there's not enough of it
@@ -810,6 +811,10 @@ function Controls:render()
 		end
 	end end  -- /not is_portrait
 
+	-- Publish the filename-line anchor so SkipPill can sit on the same line,
+	-- right-aligned, just above the progress bar.
+	self.skip_anchor = {right = area_bx - FILENAME_INSET, baseline = progress_y - FILENAME_GAP}
+
 	-- ==================== 1. PROGRESS BAR (full width, bigger + smoother) ====================
 	draw_glass({
 		x = area_ax, y = progress_y, w = area_w, h = progress_h, r = progress_h / 2,
@@ -835,13 +840,41 @@ function Controls:render()
 	local progress_hitbox = {ax = area_ax, ay = progress_y, bx = area_bx, by = progress_y + progress_h}
 
 	if state.chapters and #state.chapters > 0 and state.duration and state.duration > 0 then
+		local tick_w = math.max(6, math.floor(progress_h * 0.2))
+		local ti = 0
 		for _, chapter in ipairs(state.chapters) do
 			if chapter.time > 0 and chapter.time < state.duration then
+				ti = ti + 1
+				-- Alternate red / blue so chapter boundaries are unmistakable.
+				-- ASS colors are BGR: red = 0000FF, blue = FF0000.
+				local col = (ti % 2 == 1) and '0000FF' or 'FF0000'
 				local tx = trk_ax + math.floor(trk_w * (chapter.time / state.duration))
+				local x0 = tx - math.floor(tick_w / 2)
+				local x1 = x0 + tick_w
 				ass:new_event()
 				ass:append(string.format(
-					'{\\an7\\pos(0,0)\\bord0\\shad0\\1c&HFFFFFF&\\1a&H50&\\p1}m %d %d l %d %d l %d %d l %d %d{\\p0}',
-					tx, trk_y, tx + 2, trk_y, tx + 2, trk_y + trk_h, tx, trk_y + trk_h
+					'{\\an7\\pos(0,0)\\bord1\\shad0\\1c&H%s&\\3c&HFFFFFF&\\1a&H00&\\p1}m %d %d l %d %d l %d %d l %d %d{\\p0}',
+					col, x0, trk_y, x1, trk_y, x1, trk_y + trk_h, x0, trk_y + trk_h
+				))
+			end
+		end
+
+		-- Chapter title on hover: while the cursor is over the progress bar,
+		-- show the title of the chapter under it, just above the bar.
+		if get_point_to_rectangle_proximity(cursor, progress_hitbox) == 0 then
+			local rel = (cursor.x - trk_ax) / trk_w
+			if rel < 0 then rel = 0 elseif rel > 1 then rel = 1 end
+			local chapter, ci = chapters_lib.chapter_at_time(state.chapters, state.duration * rel)
+			if chapter then
+				local label = chapters_lib.truncate(chapters_lib.chapter_label(chapter, ci), 48)
+				label = label:gsub('\\', '\\\\'):gsub('{', '\\{'):gsub('}', '\\}')
+				local tcx = cursor.x
+				if tcx < area_ax + 60 then tcx = area_ax + 60 elseif tcx > area_bx - 60 then tcx = area_bx - 60 end
+				ass:new_event()
+				ass:append(string.format(
+					'{\\an2\\pos(%d,%d)\\fn%s\\fs%d\\bord2\\3c&H000000&\\3a&H10&\\shad2\\4c&H000000&\\4a&H40&\\1c&H%s&}%s',
+					math.floor(tcx), progress_y - 4,
+					config.font, math.floor(progress_h * 0.7), ink_bgr, label
 				))
 			end
 		end
