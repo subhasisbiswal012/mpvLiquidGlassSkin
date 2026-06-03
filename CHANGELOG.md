@@ -5,17 +5,20 @@ All notable changes to mpv Liquid Glass are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.2.0] — 2026-06-03
 
 YouTube-style chapter and playlist navigation on the progress bar.
 
 ### Added
 
-- **Chapter title on hover** — hovering the progress bar now shows the title of the section under the cursor (instead of a timestamp). Untitled chapters fall back to "Chapter N".
-- **Hovered-chapter glow** — the full span of the hovered chapter glows on the bar in the accent color, so you can see exactly which section you're pointing at.
-- **Jump-to-chapter pill** — a floating "Jump: \<next chapter\>" pill appears above the right of the bar while the controls are visible; clicking it skips to the next chapter.
+- **Chapter title on hover** — hovering the progress bar shows the title of the section under the cursor, in a readable label just above the bar. Untitled chapters fall back to "Chapter N".
+- **Jump-to-chapter pill** — a floating "Jump: \<next chapter\>" pill sits on the filename line, right-aligned, while the controls are visible; clicking it skips to the next chapter.
 - **Next-video pill** — within the last `liquid_glass_next_video_threshold` seconds (default 120) of a file that has a queued playlist item, the pill becomes "Next: \<video title\>" and plays the next entry on click.
 - **`liquid_glass_next_video_threshold`** option in `liquid-glass.conf` to tune when the Next-video pill appears.
+
+### Changed
+
+- **Chapter markers** on the progress bar are now thicker and alternate red/blue with a contrasting outline, so chapter boundaries are easy to spot over any video (previously thin and white).
 
 ## [1.1.0] — 2026-05-30
 
